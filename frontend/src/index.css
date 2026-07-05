@@ -1,0 +1,119 @@
+@import url("https://api.fontshare.com/v2/css?f[]=clash-display@200,300,400,500,600,700&display=swap");
+@import url("https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: "Satoshi", ui-sans-serif, system-ui, sans-serif;
+    background: #050505;
+    color: #ffffff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: "Clash Display", "Satoshi", sans-serif;
+    letter-spacing: -0.02em;
+}
+
+.font-display-tight {
+    font-family: "Clash Display", sans-serif;
+    letter-spacing: -0.04em;
+}
+
+::selection {
+    background: #FF3B30;
+    color: #ffffff;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #262626; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #404040; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.glass {
+    background: rgba(18, 18, 18, 0.7);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.text-glow-red { text-shadow: 0 0 40px rgba(255, 59, 48, 0.5); }
+.text-glow-amber { text-shadow: 0 0 30px rgba(255, 176, 0, 0.6); }
+
+.live-pulse {
+    position: relative;
+}
+.live-pulse::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    animation: livepulse 1.6s ease-out infinite;
+    background: rgba(255, 59, 48, 0.5);
+    z-index: -1;
+}
+@keyframes livepulse {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.2); opacity: 0; }
+}
+
+.grain {
+    position: relative;
+}
+.grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+    opacity: 0.08;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 2%;
+        --foreground: 0 0% 100%;
+        --card: 0 0% 7%;
+        --card-foreground: 0 0% 100%;
+        --popover: 0 0% 7%;
+        --popover-foreground: 0 0% 100%;
+        --primary: 4 100% 59%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 0 0% 10%;
+        --secondary-foreground: 0 0% 100%;
+        --muted: 0 0% 10%;
+        --muted-foreground: 0 0% 64%;
+        --accent: 4 100% 59%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 4 100% 59%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 0 0% 15%;
+        --input: 0 0% 15%;
+        --ring: 4 100% 59%;
+        --radius: 0.75rem;
+        --chart-1: 4 100% 59%;
+        --chart-2: 39 100% 50%;
+        --chart-3: 145 63% 49%;
+        --chart-4: 195 100% 60%;
+        --chart-5: 270 60% 65%;
+    }
+}
+
+@layer base {
+    * { @apply border-border; }
+    body { @apply bg-background text-foreground; }
+}
+
+@layer utilities {
+    .rail-fade {
+        mask-image: linear-gradient(to right, transparent 0%, black 3%, black 97%, transparent 100%);
+    }
+}

@@ -1,0 +1,142 @@
+{
+  "theme": "DARK",
+  "archetype": "Archetype 5 (Luxury) mixed with Archetype 4 (Swiss & High-Contrast)",
+  "emotional_tone": "Cinematic, Immersive, Premium, Authoritative",
+  "typography": {
+    "heading_font": "Clash Display",
+    "body_font": "Satoshi",
+    "font_imports": [
+      "https://api.fontshare.com/v2/css?f[]=clash-display@200,300,400,500,600,700&display=swap",
+      "https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&display=swap"
+    ],
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-semibold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-medium",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+      "body": "text-base leading-relaxed text-gray-300",
+      "small": "text-sm text-gray-400",
+      "overline": "text-xs tracking-[0.2em] uppercase font-bold text-accent-primary"
+    }
+  },
+  "colors": {
+    "background": {
+      "base": "#050505",
+      "surface": "#121212",
+      "surface_elevated": "#1A1A1A",
+      "glass": "rgba(18, 18, 18, 0.7)"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#E0E0E0",
+      "tertiary": "#A3A3A3"
+    },
+    "border": {
+      "default": "#262626",
+      "focus": "#404040",
+      "glass": "rgba(255, 255, 255, 0.1)"
+    },
+    "accents": {
+      "primary": "#FF3B30",
+      "primary_hover": "#FF5C53",
+      "web3_glow": "#FFB000",
+      "success": "#34C759"
+    }
+  },
+  "spacing_scale": {
+    "generous": "p-8 md:p-12 lg:p-16",
+    "standard": "p-4 md:p-6",
+    "tight": "p-2 md:p-4",
+    "component_gap": "gap-6 md:gap-8 lg:gap-12",
+    "grid_gap": "gap-4 md:gap-6"
+  },
+  "motion_patterns": {
+    "hover": "transition-transform duration-300 ease-out hover:-translate-y-1 hover:shadow-xl",
+    "image_zoom": "transition-transform duration-700 ease-in-out hover:scale-105",
+    "glass_blur": "backdrop-blur-xl backdrop-saturate-150"
+  },
+  "components": {
+    "buttons": "rounded-full px-6 py-3 font-medium tracking-wide transition-all",
+    "cards": "bg-[#121212] border border-[#262626] rounded-2xl overflow-hidden hover:border-[#404040] transition-colors",
+    "video_player": "aspect-video bg-black rounded-xl overflow-hidden shadow-2xl ring-1 ring-white/10",
+    "navigation": "sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5",
+    "badges": "rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-white/10 text-white"
+  },
+  "layout_blueprints": {
+    "home_discovery": "Hero image max-h-[80vh] with bg-gradient-to-t from-[#050505] to-transparent overlay. Followed by overlapping horizontal scroll rails (gap-4) for categories.",
+    "video_player_page": "Theater mode default: Player spans col-span-12 lg:col-span-8. Sidebar (col-span-12 lg:col-span-4) for chat/watch-party and next episodes.",
+    "creator_channel": "Large banner image (h-64 md:h-80). Profile avatar overlapping banner. Grid layout (grid-cols-1 sm:grid-cols-2 lg:grid-cols-4) for videos.",
+    "wallet_dashboard": "Bento grid layout. 1 Hero metric card (span-full md:span-2). 2 Secondary metric cards. Table for transaction history.",
+    "live_tv_grid": "Dense table/grid (Control Room mode). Tight gaps (gap-2). Red pulsing dot for 'LIVE' indicators."
+  },
+  "testing_attributes": {
+    "required": true,
+    "pattern": "data-testid=\"{page}-{element}-{role}\"",
+    "examples": [
+      "data-testid=\"home-hero-play-button\"",
+      "data-testid=\"wallet-balance-text\"",
+      "data-testid=\"nav-search-input\""
+    ]
+  },
+  "assets": {
+    "hero_broadcast_streaming": [
+      {
+        "url": "https://images.unsplash.com/photo-1782020934325-cfe4cea4fd9c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwyfHxjaW5lbWF0aWMlMjBtb3ZpZSUyMHBvc3RlciUyMGRhcmt8ZW58MHx8fHwxNzgzMjUwNjQ4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Cinematic dark scene, ideal for main hero VOD."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1778585040075-0991abfd4ed9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwzfHxjaW5lbWF0aWMlMjBtb3ZpZSUyMHBvc3RlciUyMGRhcmt8ZW58MHx8fHwxNzgzMjUwNjQ4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Textured dramatic poster style, good for LoNo Originals."
+      },
+      {
+        "url": "https://images.pexels.com/photos/3137890/pexels-photo-3137890.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Cinema hallway with posters, suitable for 'Coming Soon' section."
+      }
+    ],
+    "creator_portraits": [
+      {
+        "url": "https://images.unsplash.com/photo-1655947717064-d856af599bd1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxNzV8MHwxfHNlYXJjaHwxfHxwb2RjYXN0ZXIlMjBzdHVkaW8lMjBtaWNyb3Bob25lfGVufDB8fHx8MTc4MzI1MDY0OHww&ixlib=rb-4.1.0&q=85",
+        "description": "Podcaster/creator with headphones and mic."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1636294155433-29863ca33aa6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxNzV8MHwxfHNlYXJjaHwyfHxwb2RjYXN0ZXIlMjBzdHVkaW8lMjBtaWNyb3Bob25lfGVufDB8fHx8MTc4MzI1MDY0OHww&ixlib=rb-4.1.0&q=85",
+        "description": "Creator studio desk setup."
+      }
+    ],
+    "abstract_token_network": [
+      {
+        "url": "https://images.unsplash.com/photo-1759771963975-8a4885446f1f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMG5ldHdvcmslMjBub2RlJTIwZGFya3xlbnwwfHx8fDE3ODMyNTA2NDh8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Glowing ring on black background, perfect for Token Economy or DAO visualization."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1737505599162-d9932323a889?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMG5ldHdvcmslMjBub2RlJTIwZGFya3xlbnwwfHx8fDE3ODMyNTA2NDh8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Network nodes connected, great for Web3 / Staking sections."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1775057154553-0f3e8902fea3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwzfHxhYnN0cmFjdCUyMG5ldHdvcmslMjBub2RlJTIwZGFya3xlbnwwfHx8fDE3ODMyNTA2NDh8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Geometric network lines, perfect for abstract Web3 backgrounds."
+      }
+    ],
+    "gaming_and_live": [
+      {
+        "url": "https://images.pexels.com/photos/9072394/pexels-photo-9072394.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Esports gaming setup, for live streaming thumbnails."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwyfHxsaXZlJTIwY29uY2VydCUyMHN0YWdlJTIwZGFya3xlbnwwfHx8fDE3ODMyNTA2NDl8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Live concert dark stage, suitable for Live Events thumbnail."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxsaXZlJTIwY29uY2VydCUyMHN0YWdlJTIwZGFya3xlbnwwfHx8fDE3ODMyNTA2NDl8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Concert performance."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Ensure all interactive elements have data-testid attributes for E2E testing reliability.",
+    "Use Phosphor icons (@phosphor-icons/react) or Lucide React for a premium, consistent icon set.",
+    "Avoid typical purple/blue gradients entirely to maintain the distinct high-end cinematic feel.",
+    "Implement 'Clash Display' for headings and 'Satoshi' for body text using the provided Fontshare links.",
+    "For horizontal scrolling rails (like Netflix UI), ensure scrollbars are hidden and padding is handled to not clip hover scales.",
+    "Use pure HTML/Tailwind for the creative marketing/home views, and rely on Shadcn UI (heavily customized) for the Wallet and Dashboard dense tables."
+  ]
+}

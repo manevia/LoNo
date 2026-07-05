@@ -1,0 +1,45 @@
+{
+  "summary": "First E2E test of LoNo MVP. Backend: 25/26 pytest passing (96%). Fixed 1 ObjectId serialization bug in /api/creator/dashboard. Frontend: Home, Signup, Login, Wallet (balance 100 shown, transactions signup_bonus row visible), Governance (vote works, double-vote blocked with toast 'Already voted on this proposal'), Watch page all load. CRITICAL FRONTEND BUG: 'Made with Emergent' badge (id=emergent-badge, z-index 9999) overlaps and intercepts pointer events on AI Chat FAB (data-testid=ai-chat-fab, z-index 40) at bottom-right corner. Users cannot open AI chat with a normal click. Also BLOCKER: EMERGENT_LLM_KEY budget exceeded ('Max budget: 0.001') so /api/ai/chat returns 500. AI summarize succeeded once but ai/chat consistently fails.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/ai/chat", "issue": "500 - litellm.BadRequestError: Budget has been exceeded! Current cost: 0.002142, Max budget: 0.001. EMERGENT_LLM_KEY quota exhausted.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "/api/payments/checkout", "issue": "Returns 500 with Stripe AuthenticationError because STRIPE_API_KEY='sk_test_emergent' is invalid. Need a real test key to verify checkout URL returned.", "priority": "MEDIUM"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AIChatFloat", "issue": "The Emergent 'Made with Emergent' badge (#emergent-badge, z-index 9999) sits at bottom-right and overlaps the AI Chat FAB (z-index 40). Pointer events are intercepted so real users cannot click the FAB. Confirmed via getBoundingClientRect overlap=true and z-index comparison. Fix: increase FAB z-index above 9999 (e.g. z-[10000]) OR shift FAB position (e.g. bottom-24 to sit above the badge).", "selector": "[data-testid='ai-chat-fab']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "AI Chat send", "issue": "Depends on /api/ai/chat which is 500 due to EMERGENT_LLM_KEY budget exceeded; even when FAB force-opened, sending message shows fallback 'Sorry, I'm having trouble right now.'", "affected_selectors": ["[data-testid='ai-chat-send']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_lono_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "URGENT: Refresh/replace EMERGENT_LLM_KEY - current key has max budget $0.001 which is exceeded, blocking /api/ai/chat.",
+    "Fix z-index/positioning conflict between AI Chat FAB and Emergent badge. Suggest: className='fixed bottom-24 right-6 z-[10000]' or move FAB to bottom-left.",
+    "Provide a valid Stripe test key (currently sk_test_emergent placeholder is rejected by Stripe API).",
+    "Optional: expose better error surfacing when AI/chat returns 500 (currently shown as generic fallback message)."
+  ],
+  "critical_code_review_comments": [
+    "server.py creator_dashboard: FIXED - was returning raw Mongo doc with injected _id (ObjectId) after insert_one; now pops _id. Same pattern should be reviewed in other insert-and-return endpoints (creator_upload already pops).",
+    "server.py stake endpoint: stake_doc is inserted by insert_one which injects _id; response pops _id (good).",
+    "server.py: seed_if_empty may leave stale _id in memory but not returned to user - OK.",
+    "Frontend: AIChatFloat FAB uses z-40 while Emergent badge is z-9999 → z-index conflict.",
+    "server.py content watch endpoint gives 1 LONO/min capped at 10 per event but request in problem statement said 300s=5 LONO reward → matches (implemented correctly)."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (added ch.pop('_id', None) after insert in /api/creator/dashboard)",
+    "/app/backend/tests/test_lono_api.py (new)"
+  ],
+  "success_rate": {"backend": "96% (25/26 pytest; only /api/ai/chat failing due to LLM key budget)", "frontend": "~85% (all core pages/flows work; AI chat blocked by badge overlap + LLM budget)"},
+  "test_credentials": "Test users created dynamically: TESTUI_*@lono.io / Passw0rd! - all successfully registered with 100 LONO signup bonus.",
+  "seed_data_creation": "None (backend seeds 29 content, 6 channels, 4 proposals at startup - verified).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend pytest lives at /app/backend/tests/test_lono_api.py (26 tests, uses REACT_APP_BACKEND_URL). Registers unique TEST_ email per run. AI chat test currently fails - main agent must obtain/rotate EMERGENT_LLM_KEY before this can pass. The emergent-badge/AI-FAB overlap is a real z-index bug (badge=9999, fab=40) - main agent should bump FAB z-index or reposition. Governance double-vote correctly returns 400 with toast 'Already voted on this proposal'. Stake, unstake, token-buy, watch-to-earn all working. Signup+redirect works, watch page renders <video>/<audio>, wallet shows balance+txns.",
+  "rca of the issue": "AI Chat FAB overlap: #emergent-badge (external injected badge, z:9999, position:fixed bottom-right) has higher stacking than AIChatFloat FAB (z:40) both at the same anchor. Real click reaches badge, opens external link. Force-click bypasses in tests but real users cannot open the chat. Fix in /app/frontend/src/components/AIChatFloat.jsx: change 'fixed bottom-6 right-6 z-40' to 'fixed bottom-24 right-6 z-[10000]' (or similar). Creator dashboard 500 RCA: insert_one mutates dict adding _id ObjectId; FastAPI serialization failed → FIXED by pop('_id')."
+}
