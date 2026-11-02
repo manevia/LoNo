@@ -1,6 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
-import { Search, Radio, Wallet, User, LogOut, Home, Compass, Vote, BarChart3, Sparkles, Video } from "lucide-react";
+import { Search, Radio, Wallet, User, LogOut, Home, Compass, Vote, BarChart3, Sparkles, Video, GraduationCap } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -13,6 +13,7 @@ const NAV = [
   { to: "/browse/series", label: "Series", icon: Video },
   { to: "/browse/podcast", label: "Podcasts", icon: Radio },
   { to: "/live", label: "Live", icon: Radio },
+  { to: "/learn", label: "Learn", icon: GraduationCap },
   { to: "/tokenomics", label: "Token", icon: BarChart3 },
   { to: "/governance", label: "DAO", icon: Vote },
 ];
@@ -54,6 +55,7 @@ export default function Navbar() {
             <NavLink
               key={n.to}
               to={n.to}
+              end={n.to === "/"}
               data-testid={`nav-${n.label.toLowerCase()}`}
               className={({ isActive }) =>
                 `px-3 py-2 text-sm rounded-full transition-colors ${
@@ -72,7 +74,8 @@ export default function Navbar() {
             data-testid="nav-search-input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search titles, creators, tokens…"
+            placeholder="Search shows, music, courses…"
+            aria-label="Search"
             className="bg-white/5 border border-white/10 rounded-full pl-10 pr-4 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#FF3B30]/40 focus:w-80 transition-all"
           />
         </form>

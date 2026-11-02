@@ -117,3 +117,16 @@ h1, h2, h3, h4, h5, h6, .font-display {
         mask-image: linear-gradient(to right, transparent 0%, black 3%, black 97%, transparent 100%);
     }
 }
+
+@media print {
+    body { background: #fff; }
+    header, nav, [data-testid="ai-chat-fab"], .print\:hidden { display: none !important; }
+    .cert { color: #000; background: #fff !important; border-color: #b8860b !important; }
+    .cert * { color: #000 !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+:focus-visible { outline: 2px solid #FFB000; outline-offset: 2px; }

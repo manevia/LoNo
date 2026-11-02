@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, X, Send, Loader2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, errorText } from "@/lib/api";
+import { useConfig } from "@/lib/config";
 
 export default function AIChatFloat() {
+  const cfg = useConfig();
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState([
     { role: "ai", text: "Hi! I'm LoNo AI. Ask me about content, tokens, staking, or the platform." },
@@ -24,10 +26,12 @@ export default function AIChatFloat() {
       const { data } = await api.post("/ai/chat", { message: text, session_id: sessionId });
       setSessionId(data.session_id);
       setMsgs((m) => [...m, { role: "ai", text: data.reply }]);
-    } catch {
-      setMsgs((m) => [...m, { role: "ai", text: "Sorry, I'm having trouble right now. Please try again." }]);
+    } catch (err) {
+      setMsgs((m) => [...m, { role: "ai", text: errorText(err, "I couldn't answer that just now. Try again in a moment.") }]);
     } finally { setLoading(false); }
   };
+
+  if (!cfg.ai) return null;
 
   return (
     <>
@@ -35,7 +39,7 @@ export default function AIChatFloat() {
         <button
           data-testid="ai-chat-fab"
           onClick={() => setOpen(true)}
-          className="fixed bottom-24 right-6 z-[10000] w-14 h-14 rounded-full bg-[#FF3B30] hover:bg-[#FF5C53] grid place-items-center shadow-2xl shadow-[#FF3B30]/40 transition"
+          className="fixed bottom-24 lg:bottom-8 right-4 md:right-6 z-[10000] w-14 h-14 rounded-full bg-[#FF3B30] hover:bg-[#FF5C53] grid place-items-center shadow-2xl shadow-[#FF3B30]/40 transition"
           aria-label="Open AI Assistant"
         >
           <Sparkles className="w-6 h-6" />
@@ -43,7 +47,7 @@ export default function AIChatFloat() {
       )}
 
       {open && (
-        <div data-testid="ai-chat-panel" className="fixed bottom-24 right-6 z-[10000] w-[92vw] max-w-md h-[560px] rounded-2xl glass shadow-2xl flex flex-col overflow-hidden">
+        <div data-testid="ai-chat-panel" className="fixed bottom-24 lg:bottom-8 right-4 md:right-6 z-[10000] w-[92vw] max-w-md h-[560px] rounded-2xl glass shadow-2xl flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-[#FF3B30] grid place-items-center">
@@ -51,7 +55,7 @@ export default function AIChatFloat() {
               </div>
               <div>
                 <div className="font-display text-sm font-medium">LoNo AI</div>
-                <div className="text-[10px] text-gray-400">Powered by Claude Sonnet 4.5</div>
+                <div className="text-[10px] text-gray-400">Powered by Claude</div>
               </div>
             </div>
             <button onClick={() => setOpen(false)} className="p-1.5 rounded hover:bg-white/10" aria-label="Close">

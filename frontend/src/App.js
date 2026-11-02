@@ -17,6 +17,10 @@ import Governance from "@/pages/Governance";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Profile from "@/pages/Profile";
+import Learn from "@/pages/Learn";
+import Course from "@/pages/Course";
+import Certificate from "@/pages/Certificate";
+import MobileNav from "@/components/MobileNav";
 
 const Protected = ({ children }) => {
   const { user, loading } = useAuth();
@@ -28,8 +32,9 @@ const Protected = ({ children }) => {
 const Shell = ({ children }) => (
   <div className="min-h-screen bg-[#050505] text-white">
     <Navbar />
-    <main>{children}</main>
+    <main className="pb-16 lg:pb-0">{children}</main>
     <AIChatFloat />
+    <MobileNav />
   </div>
 );
 
@@ -41,7 +46,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/profile" element={<Shell><Profile /></Shell>} />
+          <Route path="/profile" element={<Protected><Shell><Profile /></Shell></Protected>} />
           <Route path="/" element={<Shell><Home /></Shell>} />
           <Route path="/watch/:id" element={<Shell><Watch /></Shell>} />
           <Route path="/live" element={<Shell><Live /></Shell>} />
@@ -50,6 +55,9 @@ export default function App() {
           <Route path="/channel/:id" element={<Shell><Channel /></Shell>} />
           <Route path="/studio" element={<Protected><Shell><Studio /></Shell></Protected>} />
           <Route path="/wallet" element={<Protected><Shell><Wallet /></Shell></Protected>} />
+          <Route path="/learn" element={<Shell><Learn /></Shell>} />
+          <Route path="/learn/:id" element={<Shell><Course /></Shell>} />
+          <Route path="/certificates/:id" element={<Shell><Certificate /></Shell>} />
           <Route path="/tokenomics" element={<Shell><Tokenomics /></Shell>} />
           <Route path="/governance" element={<Shell><Governance /></Shell>} />
           <Route path="*" element={<Navigate to="/" replace />} />

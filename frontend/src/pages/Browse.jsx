@@ -35,7 +35,7 @@ export default function Browse() {
         <div className="mt-16 text-gray-400">No content yet in this category.</div>
       ) : (
         <div className="mt-10 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {items.map((i) => <div key={i.id} className="w-full"><ContentCard item={i} /></div>)}
+          {items.map((i) => <div key={i.id} className="w-full"><ContentCard item={i} compact /></div>)}
         </div>
       )}
     </div>

@@ -8,8 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const token = localStorage.getItem("lono_token");
-    if (!token) { setUser(null); setLoading(false); return; }
+    if (!localStorage.getItem("lono_token")) { setUser(null); setLoading(false); return; }
     try {
       const { data } = await api.get("/auth/me");
       setUser(data);
@@ -21,26 +20,16 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const login = async (email, password) => {
-    const { data } = await api.post("/auth/login", { email, password });
+  const accept = (data) => {
     localStorage.setItem("lono_token", data.token);
     setUser(data.user);
     return data.user;
   };
 
-  const register = async (email, password, name) => {
-    const { data } = await api.post("/auth/register", { email, password, name });
-    localStorage.setItem("lono_token", data.token);
-    setUser(data.user);
-    return data.user;
-  };
-
-  const googleExchange = async (session_id) => {
-    const { data } = await api.post("/auth/google", { session_id });
-    localStorage.setItem("lono_token", data.token);
-    setUser(data.user);
-    return data.user;
-  };
+  const login = async (email, password) => accept((await api.post("/auth/login", { email, password })).data);
+  const register = async (email, password, name) =>
+    accept((await api.post("/auth/register", { email, password, name })).data);
+  const googleLogin = async (credential) => accept((await api.post("/auth/google", { credential })).data);
 
   const logout = () => {
     localStorage.removeItem("lono_token");
@@ -48,7 +37,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, googleExchange, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

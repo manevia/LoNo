@@ -80,3 +80,11 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/frontend/node_modules/.cache/default-development/1.pack
+
+# LoNo
+backend/.venv/
+backend/data/
+backend/.env
+backend/.env.docker
+frontend/.env.local
+__pycache__/

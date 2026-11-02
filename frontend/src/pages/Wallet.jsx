@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, errorText } from "@/lib/api";
+import { useConfig } from "@/lib/config";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { Loader2, ArrowUpRight, ArrowDownRight, Copy, Coins, TrendingUp, Lock, Unlock, CreditCard } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -10,7 +12,9 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export default function Wallet() {
-  const { refresh } = useAuth();
+  const { refresh, user } = useAuth();
+  const cfg = useConfig();
+  const [params, setParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [tx, setTx] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,21 +28,28 @@ export default function Wallet() {
     setData(w.data); setTx(t.data); setLoading(false);
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const c = params.get("checkout");
+    if (!c) return;
+    if (c === "success") { toast.success("Payment received", { description: "Your plan updates as soon as Stripe confirms it." }); setTimeout(refresh, 3000); }
+    if (c === "cancelled") toast("Checkout cancelled. You haven't been charged.");
+    setParams({}, { replace: true });
+  }, [params, setParams, refresh]);
 
   const doStake = async () => {
     try {
       await api.post("/wallet/stake", stakeForm);
       toast.success(`Staked ${stakeForm.amount} $LONO`);
       setStakeOpen(false); refresh(); load();
-    } catch (e) { toast.error(e.response?.data?.detail || "Stake failed"); }
+    } catch (e) { toast.error(errorText(e, "Staking didn't go through")); }
   };
 
   const doUnstake = async (id) => {
     try {
       const { data } = await api.post(`/wallet/unstake/${id}`);
-      toast.success(`Received ${data.returned.toFixed(2)} $LONO`, { description: `+${data.reward.toFixed(4)} reward` });
+      toast.success(`Returned ${data.returned.toFixed(2)} $LONO`, { description: data.early ? "Unstaked early, so no reward was paid" : `Includes ${data.reward.toFixed(4)} reward` });
       refresh(); load();
-    } catch (e) { toast.error(e.response?.data?.detail || "Unstake failed"); }
+    } catch (e) { toast.error(errorText(e, "Unstaking didn't go through")); }
   };
 
   const doBuy = async () => {
@@ -46,14 +57,14 @@ export default function Wallet() {
       const { data } = await api.post("/payments/token-buy", { amount_usd: Number(buyAmt) });
       toast.success(data.message);
       setBuyOpen(false); refresh(); load();
-    } catch (e) { toast.error("Purchase failed"); }
+    } catch (e) { toast.error(errorText(e, "Purchase didn't go through")); }
   };
 
   const checkout = async (plan) => {
     try {
       const { data } = await api.post("/payments/checkout", { plan });
       if (data.url) window.location.href = data.url;
-    } catch { toast.error("Checkout failed"); }
+    } catch (e) { toast.error(errorText(e, "Checkout couldn't start")); }
   };
 
   if (loading || !data) return <div className="min-h-[70vh] grid place-items-center"><Loader2 className="w-8 h-8 animate-spin text-[#FF3B30]" /></div>;
@@ -75,13 +86,13 @@ export default function Wallet() {
               {total.toFixed(2)}
               <span className="text-2xl text-gray-400 ml-3 font-normal">$LONO</span>
             </div>
-            <div className="mt-2 text-sm text-gray-400">≈ ${(total * 0.184).toFixed(2)} USD</div>
+            <div className="mt-2 text-sm text-gray-400">≈ ${(total * cfg.lono_price_usd).toFixed(2)} USD (simulated price)</div>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button onClick={() => setStakeOpen(true)} data-testid="stake-btn" className="flex items-center gap-2 bg-white text-black hover:bg-gray-200 rounded-full px-5 py-2.5 text-sm font-medium">
                 <Lock className="w-4 h-4" /> Stake
               </button>
-              <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
+              {cfg.simulated_token_purchase && <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
                 <DialogTrigger asChild>
                   <button data-testid="buy-btn" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full px-5 py-2.5 text-sm font-medium">
                     <TrendingUp className="w-4 h-4" /> Buy $LONO
@@ -89,19 +100,20 @@ export default function Wallet() {
                 </DialogTrigger>
                 <DialogContent className="bg-[#0a0a0a] border-white/10 text-white">
                   <DialogHeader><DialogTitle className="font-display">Buy $LONO</DialogTitle></DialogHeader>
+                  <p className="text-sm text-gray-400">Demo mode: this adds $LONO to your wallet without taking a payment. Up to $500 per purchase.</p>
                   <div className="space-y-4">
                     <div>
                       <Label className="text-xs">Amount (USD)</Label>
                       <Input data-testid="buy-amount" type="number" value={buyAmt} onChange={(e) => setBuyAmt(e.target.value)} className="bg-white/5 border-white/10" />
                     </div>
-                    <div className="text-sm text-gray-400">You'll receive ≈ <span className="text-[#FFB000] font-mono">{(buyAmt / 0.184).toFixed(2)} LONO</span></div>
-                    <Button data-testid="buy-confirm" onClick={doBuy} className="w-full bg-[#FF3B30] hover:bg-[#FF5C53] rounded-full">Confirm (Simulated)</Button>
+                    <div className="text-sm text-gray-400">You'll receive ≈ <span className="text-[#FFB000] font-mono">{(buyAmt / cfg.lono_price_usd).toFixed(2)} LONO</span></div>
+                    <Button data-testid="buy-confirm" onClick={doBuy} className="w-full bg-[#FF3B30] hover:bg-[#FF5C53] rounded-full">Add $LONO</Button>
                   </div>
                 </DialogContent>
-              </Dialog>
-              <button onClick={() => checkout("premium")} data-testid="upgrade-premium-btn" className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-5 py-2.5 text-sm">
+              </Dialog>}
+              {user?.plan === "free" && cfg.payments && <button onClick={() => checkout("premium")} data-testid="upgrade-premium-btn" className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-5 py-2.5 text-sm">
                 <CreditCard className="w-4 h-4" /> Upgrade Premium
-              </button>
+              </button>}
             </div>
 
             <div className="mt-6 flex items-center gap-2 text-xs text-gray-400">
@@ -148,7 +160,7 @@ export default function Wallet() {
                 </div>
                 <div className="mt-3 text-xs text-gray-500">Unlocks: {new Date(s.unlock_at).toLocaleDateString()}</div>
                 <button data-testid={`unstake-${s.id}`} onClick={() => doUnstake(s.id)} className="mt-4 w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full py-2 text-sm">
-                  <Unlock className="w-3.5 h-3.5" /> Unstake early
+                  <Unlock className="w-3.5 h-3.5" /> {s.unlocked ? `Unstake with ${s.accrued.toFixed(2)} reward` : "Unstake early (no reward)"}
                 </button>
               </div>
             ))}

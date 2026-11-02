@@ -1,0 +1,31 @@
+# ./start.sh --docker  (or start.cmd -Docker on Windows)  →  http://localhost:8080
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes: [mongo-data:/data/db]
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - path: ./backend/.env.docker   # created by start.ps1 / start.sh, or copy .env.docker.example
+        required: false
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      LOCAL_STORAGE_DIR: /app/data/uploads
+    volumes: [uploads:/app/data/uploads]
+    depends_on: [mongo]
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    restart: unless-stopped
+    ports: ["8080:80"]
+    depends_on: [backend]
+
+volumes:
+  mongo-data:
+  uploads:

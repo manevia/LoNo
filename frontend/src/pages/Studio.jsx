@@ -126,7 +126,7 @@ export default function Studio() {
                 </div>
               </div>
               <div><Label className="text-xs">Stream URL</Label><Input data-testid="upload-stream" value={form.stream_url} onChange={(e) => setForm({ ...form, stream_url: e.target.value })} className="bg-white/5 border-white/10" /></div>
-              <div className="text-[10px] text-gray-500">Files stored on Emergent Object Storage. Max 100MB per file. Whisper subtitles auto-generatable if under 25MB.</div>
+              <div className="text-[10px] text-gray-500">Up to 100 MB per file. Auto-captions work on media under 25 MB.</div>
               <Button data-testid="upload-submit" type="submit" className="w-full bg-[#FF3B30] hover:bg-[#FF5C53] rounded-full">Publish</Button>
             </form>
           </DialogContent>

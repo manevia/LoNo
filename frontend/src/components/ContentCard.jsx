@@ -2,13 +2,13 @@ import { Link } from "react-router-dom";
 import { Play, Star, Radio } from "lucide-react";
 import { resolveMedia } from "@/lib/api";
 
-export default function ContentCard({ item, rank = null }) {
+export default function ContentCard({ item, rank = null, compact = false }) {
   const isLive = item.kind === "live_tv" || item.kind === "live_radio";
   return (
     <Link
       to={`/watch/${item.id}`}
       data-testid={`content-card-${item.id}`}
-      className="group flex-shrink-0 w-[220px] md:w-[260px] relative"
+      className={`group relative ${compact ? "w-full" : "flex-shrink-0 w-[220px] md:w-[260px]"}`}
     >
       {rank !== null && (
         <div className="absolute -left-2 top-0 z-10 font-display text-[8rem] leading-none font-black text-transparent"
