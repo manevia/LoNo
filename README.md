@@ -1,5 +1,7 @@
 # LoNo
 
+[![CI](https://github.com/manevia/LoNo/actions/workflows/ci.yml/badge.svg)](https://github.com/manevia/LoNo/actions/workflows/ci.yml)
+
 Streaming TV, radio, podcasts, music and courses in one app, with creator channels and a
 simulated utility token ($LONO) that viewers earn by watching and learning, then stake and vote with.
 
@@ -12,6 +14,13 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 - **Version:** 2.0, rebuilt from the original Emergent prototype so it runs anywhere
 
 ## Run it
+
+### Get the code
+
+```bash
+git clone https://github.com/manevia/LoNo.git
+cd LoNo
+```
 
 ### Quickest: the launcher (needs Python 3.10+)
 
