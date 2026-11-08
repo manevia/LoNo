@@ -72,8 +72,10 @@ if (config.enableHealthCheck) {
 let webpackConfig = {
   eslint: {
     configure: {
-      extends: ["plugin:react-hooks/recommended"],
+      extends: [require.resolve("eslint-config-react-app", { paths: [require.resolve("react-scripts/package.json")] }), "plugin:react-hooks/recommended"],
       rules: {
+        "no-undef": "error",
+        "no-unused-vars": ["warn", { args: "none", ignoreRestSiblings: true }],
         "react-hooks/rules-of-hooks": "error",
         "react-hooks/exhaustive-deps": "warn",
       },
