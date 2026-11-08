@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import StudioCourses from "@/components/StudioCourses";
 
 const Stat = ({ icon: Icon, label, value, hint, color = "text-white" }) => (
   <div className="p-6 rounded-2xl bg-[#121212] border border-white/10">
@@ -152,6 +153,8 @@ export default function Studio() {
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      <StudioCourses />
 
       <div className="mt-10">
         <h2 className="font-display text-2xl mb-4">Simulcast Destinations</h2>

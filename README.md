@@ -96,13 +96,33 @@ capped at 45 seconds), so a client can't claim time it didn't spend.
 `/certificates/<id>` recomputes it, so an edited certificate shows as not valid. A failed quiz
 attempt shows which answers were wrong, never the right ones.
 
+## Course builder (for creators)
+
+Creators build courses in **Studio, then Courses, then New course**:
+
+1. Write the lessons: text, an optional video (paste a link or upload) and a duration.
+2. Write a quiz of at least 3 questions, mark each correct answer, and set the pass mark.
+3. Publish. A checklist in the editor says what's still missing.
+4. With `ANTHROPIC_API_KEY` set, the editor can draft quiz questions from your lesson text. You review and save them yourself.
+
+Rules that keep the economy fair:
+
+| Rule | Default | Setting |
+|---|---|---|
+| Learners who pass earn a platform-set reward; creators can't choose their own | 10 $LONO | `CREATOR_COURSE_REWARD` |
+| The creator earns a payout each time someone else passes | 2 $LONO | `CREATOR_PAYOUT_PER_CERT` |
+| Passing your own course earns nothing | | |
+| A published course can't be edited into an incomplete state | | |
+| A course whose learners hold certificates can only be unpublished, not deleted | | |
+| Editing lessons keeps learners' progress on the lessons that remain | | |
+
 ## Tests
 
 ```bash
 cd backend && pytest
 ```
 
-20 API tests cover:
+26 API tests cover:
 
 - accounts
 - likes, My List and subscriptions
@@ -112,6 +132,7 @@ cd backend && pytest
 - the course-to-certificate flow, including tamper detection
 - uploads and video range requests
 - the creator studio
+- the course builder: drafts, publishing, payouts, editing rules and AI question drafts
 
 ## Project layout
 
@@ -123,11 +144,11 @@ backend/
   app/storage.py         local disk or S3, with range requests
   app/ai.py              Claude + speech-to-text clients
   app/seed.py            demo catalogue and courses
-  app/routers/           auth, content, watch, creator, wallet, governance, ai, payments, files, learn
+  app/routers/           auth, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn
   tests/
 frontend/src/
   pages/                 Home, Watch, Live, Browse, Search, Channel, Studio, Wallet,
-                         Tokenomics, Governance, Learn, Course, Certificate, Profile, Login, Signup
+                         Tokenomics, Governance, Learn, Course, CourseEditor, Certificate, Profile, Login, Signup
   lib/                   api client, auth, feature config, useWatchSession
 docs/                    PRD, design guidelines, screenshots
 start.cmd / start.ps1    Windows launcher

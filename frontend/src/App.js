@@ -20,6 +20,7 @@ import Profile from "@/pages/Profile";
 import Learn from "@/pages/Learn";
 import Course from "@/pages/Course";
 import Certificate from "@/pages/Certificate";
+import CourseEditor from "@/pages/CourseEditor";
 import MobileNav from "@/components/MobileNav";
 
 const Protected = ({ children }) => {
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/channel/:id" element={<Shell><Channel /></Shell>} />
           <Route path="/studio" element={<Protected><Shell><Studio /></Shell></Protected>} />
           <Route path="/wallet" element={<Protected><Shell><Wallet /></Shell></Protected>} />
+          <Route path="/studio/courses/:id" element={<Protected><Shell><CourseEditor /></Shell></Protected>} />
           <Route path="/learn" element={<Shell><Learn /></Shell>} />
           <Route path="/learn/:id" element={<Shell><Course /></Shell>} />
           <Route path="/certificates/:id" element={<Shell><Certificate /></Shell>} />

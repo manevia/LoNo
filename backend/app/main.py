@@ -7,12 +7,12 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import ai, auth, content, creator, files, governance, learn, payments, wallet, watch
+from .routers import ai, auth, content, creator, creator_courses, files, governance, learn, payments, wallet, watch
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 
 @asynccontextmanager
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LoNo API", version=VERSION, lifespan=lifespan)
 api = APIRouter(prefix="/api")
-for r in (auth, content, watch, creator, wallet, governance, ai, payments, files, learn):
+for r in (auth, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn):
     api.include_router(r.router)
 
 

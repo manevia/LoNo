@@ -6,7 +6,7 @@ def correct_answers(course_id):
 
 
 def test_learn_flow(client, user):
-    courses = client.get("/api/learn/courses").json()
+    courses = [c for c in client.get("/api/learn/courses").json() if not c.get("owner_id")]
     assert len(courses) == 3
     c = client.get(f"/api/learn/courses/{courses[0]['id']}").json()
     assert all("answer_index" not in q for q in c["quiz"]["questions"])
@@ -39,7 +39,7 @@ def test_learn_flow(client, user):
 def test_tampered_certificate_detected(client, user):
     import asyncio
     from app.db import db
-    c = client.get("/api/learn/courses").json()[1]
+    c = [c for c in client.get("/api/learn/courses").json() if not c.get("owner_id")][1]
     h = user["h"]
     client.post(f"/api/learn/courses/{c['id']}/enroll", headers=h)
     for l in c["lessons"]:

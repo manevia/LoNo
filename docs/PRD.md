@@ -49,8 +49,15 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Likes, My List, subscriptions, member proposals, real creator view charts, mobile tab bar
 - Docker Compose deploy, 20 API tests
 
+## v2.1 (Nov 2026)
+- Course builder: creators draft, edit, publish and unpublish courses with lessons, video uploads and quizzes
+- Platform-set learner reward (10 $LONO), creator payout per certificate (2 $LONO), no self-rewards
+- AI-drafted quiz questions from lesson text (Claude), reviewed by the creator before saving
+- Frontend build lint restored to the standard React rules (undefined variables now fail CI)
+- One-command launchers (start.cmd / start.sh) and GitHub Actions CI
+
 ## Backlog (post-MVP priorities)
-- **P1**: Creator course builder; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
+- **P1**: Course reviews and ratings; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction
 - **P2**: Real blockchain settlement layer, WalletConnect / MetaMask integration
 - **P2**: Marketplace (NFT, merch, tickets, licenses), programmatic ads platform, developer portal + SDK

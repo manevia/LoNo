@@ -9,6 +9,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from .. import config
 from ..db import db
 from ..ledger import credit
 from ..security import get_user, get_user_optional
@@ -31,10 +32,16 @@ def _public(course: dict) -> dict:
     return c
 
 
+PUBLISHED = {"status": {"$ne": "draft"}}  # seeded courses have no status field
+
+
 def _progress(course: dict, enr: dict | None) -> dict:
-    total = len(course.get("lessons", []))
-    done = len(enr.get("completed_lessons", [])) if enr else 0
-    return {"enrolled": bool(enr), "completed_lessons": enr.get("completed_lessons", []) if enr else [],
+    ids = [l["id"] for l in course.get("lessons", [])]
+    total = len(ids)
+    # Only count lessons that still exist; creators can edit a published course.
+    completed = [i for i in (enr.get("completed_lessons", []) if enr else []) if i in ids]
+    done = len(completed)
+    return {"enrolled": bool(enr), "completed_lessons": completed,
             "lessons_done": done, "lessons_total": total,
             "percent": round(100 * done / total) if total else 0,
             "best_score": enr.get("best_score") if enr else None,
@@ -48,7 +55,7 @@ def _fingerprint(cert: dict) -> str:
 
 
 async def _course(course_id: str) -> dict:
-    c = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    c = await db.courses.find_one({"id": course_id, **PUBLISHED}, {"_id": 0})
     if not c:
         raise HTTPException(404, "Course not found")
     return c
@@ -56,7 +63,7 @@ async def _course(course_id: str) -> dict:
 
 @router.get("/courses")
 async def courses(user=Depends(get_user_optional)):
-    items = await db.courses.find({}, {"_id": 0}).to_list(200)
+    items = await db.courses.find(PUBLISHED, {"_id": 0}).to_list(200)
     enr = {}
     if user:
         async for e in db.enrollments.find({"user_id": user["id"]}, {"_id": 0}):
@@ -112,7 +119,7 @@ async def submit_quiz(course_id: str, body: QuizIn, user=Depends(get_user)):
     enr = await db.enrollments.find_one({"user_id": user["id"], "course_id": course_id})
     if not enr:
         raise HTTPException(400, "Enroll in the course first")
-    if len(enr.get("completed_lessons", [])) < len(c.get("lessons", [])):
+    if _progress(c, enr)["lessons_done"] < len(c.get("lessons", [])):
         raise HTTPException(400, "Finish every lesson before taking the quiz")
     qs = c["quiz"]["questions"]
     results = [{"id": q["id"], "correct": body.answers.get(q["id"]) == q["answer_index"]} for q in qs]
@@ -135,9 +142,15 @@ async def submit_quiz(course_id: str, body: QuizIn, user=Depends(get_user)):
             cert["fingerprint"] = _fingerprint(cert)
             await db.certificates.insert_one(dict(cert))
             await db.enrollments.update_one({"id": enr["id"]}, {"$set": {"certificate_id": cert["id"]}})
-            reward = float(c.get("reward_lono", 0))
+            own_course = c.get("owner_id") == user["id"]
+            reward = 0.0 if own_course else float(c.get("reward_lono", 0))
             if reward > 0:
                 await credit(user["id"], reward, "learn_to_earn", f"Passed: {c['title']}", ref=cert["id"])
+            owner = c.get("owner_id")
+            if owner and owner != "system" and not own_course and config.CREATOR_PAYOUT_PER_CERT > 0:
+                await credit(owner, config.CREATOR_PAYOUT_PER_CERT, "creator_payout",
+                             f"A learner passed: {c['title']}", ref=cert["id"])
+            await db.courses.update_one({"id": c["id"]}, {"$inc": {"certificates_issued": 1}})
     return {"score": score, "passed": passed, "pass_mark": c["quiz"].get("pass_mark", 0.7),
             "results": results, "reward": reward, "certificate": cert,
             "certificate_id": (cert or {}).get("id") or enr.get("certificate_id")}

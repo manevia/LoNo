@@ -63,6 +63,10 @@ WATCH_REWARD_PER_MIN = float(_env("WATCH_REWARD_PER_MIN", "1"))
 WATCH_REWARD_CAP_PER_TITLE = float(_env("WATCH_REWARD_CAP_PER_TITLE", "10"))
 WATCH_REWARD_DAILY_CAP = float(_env("WATCH_REWARD_DAILY_CAP", "60"))
 HEARTBEAT_SEC = int(_env("HEARTBEAT_SEC", "30"))
+# Creator-published courses: the platform sets the learner reward (creators can't
+# mint their own), and pays the creator a share each time a learner passes.
+CREATOR_COURSE_REWARD = float(_env("CREATOR_COURSE_REWARD", "10"))
+CREATOR_PAYOUT_PER_CERT = float(_env("CREATOR_PAYOUT_PER_CERT", "2"))
 
 
 def features() -> dict:
