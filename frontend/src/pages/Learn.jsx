@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, resolveMedia } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Loader2, Award, Coins } from "lucide-react";
+import { Loader2, Award, Coins, Star } from "lucide-react";
 
 export default function Learn() {
   const { user } = useAuth();
@@ -62,7 +62,10 @@ export default function Learn() {
                 ) : (
                   <span className="flex items-center gap-1.5 text-[#FFB000]"><Coins className="w-4 h-4" /> {c.reward_lono} $LONO</span>
                 )}
-                <span className="text-gray-500">{c.enrolled || 0} enrolled</span>
+                <span className="text-gray-500 flex items-center gap-1">
+                  {c.rating_count > 0 && <><Star className="w-3.5 h-3.5 fill-[#FFB000] text-[#FFB000]" /> {c.rating_avg.toFixed(1)} ({c.rating_count}) / </>}
+                  {c.enrolled || 0} enrolled
+                </span>
               </div>
             </Link>
           ))}

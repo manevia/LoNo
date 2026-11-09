@@ -11,7 +11,7 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 
 - **Backend:** FastAPI + MongoDB (Motor), in `backend/`
 - **Frontend:** React 19 + Tailwind + shadcn/ui, in `frontend/`
-- **Version:** 2.1 (rebuilt from the original Emergent prototype so it runs anywhere, plus the course builder)
+- **Version:** 2.2 (rebuilt from the original Emergent prototype so it runs anywhere, plus the course builder and reviews)
 
 ## Run it
 
@@ -115,6 +115,7 @@ Rules that keep the economy fair:
 | A published course can't be edited into an incomplete state | | |
 | A course whose learners hold certificates can only be unpublished, not deleted | | |
 | Editing lessons keeps learners' progress on the lessons that remain | | |
+| Only learners who passed can rate a course (1 to 5 stars), once each; creators can't rate their own | | |
 
 ## Tests
 
@@ -122,7 +123,7 @@ Rules that keep the economy fair:
 cd backend && pytest
 ```
 
-26 API tests cover:
+29 API tests cover:
 
 - accounts
 - likes, My List and subscriptions
@@ -133,6 +134,7 @@ cd backend && pytest
 - uploads and video range requests
 - the creator studio
 - the course builder: drafts, publishing, payouts, editing rules and AI question drafts
+- course reviews: who can review, averages, editing and deleting
 
 ## Project layout
 

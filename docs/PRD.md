@@ -56,8 +56,11 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Frontend build lint restored to the standard React rules (undefined variables now fail CI)
 - One-command launchers (start.cmd / start.sh) and GitHub Actions CI
 
+## v2.2 (Nov 2026)
+- Course reviews and ratings: verified learners only, one editable review each, averages and star breakdown on the course, Learn list, catalogue cards and Studio
+
 ## Backlog (post-MVP priorities)
-- **P1**: Course reviews and ratings; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
+- **P1**: On-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction
 - **P2**: Real blockchain settlement layer, WalletConnect / MetaMask integration
 - **P2**: Marketplace (NFT, merch, tickets, licenses), programmatic ads platform, developer portal + SDK

@@ -4,6 +4,8 @@ import { api, errorText, resolveMedia } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Loader2, CheckCircle2, Circle, Lock, Award, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import CourseReviews from "@/components/CourseReviews";
+import { Stars } from "@/components/Stars";
 
 export default function Course() {
   const { id } = useParams();
@@ -69,7 +71,14 @@ export default function Course() {
       <Link to="/learn" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white"><ArrowLeft className="w-4 h-4" /> All courses</Link>
       <div className="mt-4 flex flex-wrap items-end gap-6 justify-between">
         <div className="max-w-2xl">
-          <div className="text-sm text-gray-400">{course.level} / {course.reward_lono} $LONO for passing</div>
+          <div className="text-sm text-gray-400 flex flex-wrap items-center gap-x-2">
+            <span>{course.level} / {course.reward_lono} $LONO for passing</span>
+            {course.rating_count > 0 && (
+              <a href="#reviews-heading" className="inline-flex items-center gap-1.5 hover:text-white">
+                / <Stars value={course.rating_avg} size="w-3.5 h-3.5" /> {course.rating_avg.toFixed(1)} ({course.rating_count})
+              </a>
+            )}
+          </div>
           <h1 className="mt-1 font-display text-3xl md:text-5xl font-semibold tracking-tighter">{course.title}</h1>
           <p className="mt-3 text-gray-400">{course.description}</p>
         </div>
@@ -192,6 +201,8 @@ export default function Course() {
           )}
         </section>
       </div>
+
+      <CourseReviews courseId={id} passed={p.passed} onChange={load} />
     </div>
   );
 }

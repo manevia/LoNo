@@ -119,6 +119,7 @@ async def my_courses(user=Depends(get_user)):
              "thumbnail_url": c["thumbnail_url"], "lessons": len(c["lessons"]),
              "questions": len(c["quiz"]["questions"]), "enrolled": c.get("enrolled", 0),
              "certificates_issued": c.get("certificates_issued", 0), "updated_at": c.get("updated_at"),
+             "rating_avg": c.get("rating_avg"), "rating_count": c.get("rating_count", 0),
              "ready": not _problems(c)} for c in items]
 
 
@@ -189,6 +190,7 @@ async def delete(course_id: str, user=Depends(get_user)):
     if c.get("content_id"):
         await db.content.delete_one({"id": c["content_id"]})
     await db.enrollments.delete_many({"course_id": course_id})
+    await db.reviews.delete_many({"course_id": course_id})
     await db.courses.delete_one({"id": course_id})
     return {"ok": True}
 

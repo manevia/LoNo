@@ -7,7 +7,7 @@ import hashlib
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import config
 from ..db import db
@@ -20,6 +20,11 @@ router = APIRouter(prefix="/learn", tags=["learn"])
 
 class QuizIn(BaseModel):
     answers: dict[str, int]
+
+
+class ReviewIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    text: str = Field(default="", max_length=1000)
 
 
 def _public(course: dict) -> dict:
@@ -154,6 +159,73 @@ async def submit_quiz(course_id: str, body: QuizIn, user=Depends(get_user)):
     return {"score": score, "passed": passed, "pass_mark": c["quiz"].get("pass_mark", 0.7),
             "results": results, "reward": reward, "certificate": cert,
             "certificate_id": (cert or {}).get("id") or enr.get("certificate_id")}
+
+
+# ---------- reviews ----------
+# Only learners who passed can review, so every rating comes from someone who
+# finished the course. One review per learner; they can edit or delete it.
+
+async def _refresh_rating(course: dict):
+    total, count, dist = 0, 0, {str(i): 0 for i in range(1, 6)}
+    async for r in db.reviews.find({"course_id": course["id"]}, {"rating": 1}):
+        total += r["rating"]
+        count += 1
+        dist[str(r["rating"])] += 1
+    avg = round(total / count, 2) if count else None
+    await db.courses.update_one({"id": course["id"]}, {"$set": {
+        "rating_avg": avg, "rating_count": count, "rating_dist": dist}})
+    if course.get("content_id"):  # catalogue cards show this rating too
+        await db.content.update_one({"id": course["content_id"]}, {"$set": {"rating": round(avg, 1) if avg else None}})
+    return {"average": avg, "count": count, "distribution": dist}
+
+
+@router.get("/courses/{course_id}/reviews")
+async def reviews(course_id: str, limit: int = 20, user=Depends(get_user_optional)):
+    c = await _course(course_id)
+    limit = max(1, min(limit, 100))
+    items = await db.reviews.find({"course_id": course_id}, {"_id": 0}).sort("updated_at", -1).to_list(limit)
+    mine = await db.reviews.find_one({"course_id": course_id, "user_id": user["id"]}, {"_id": 0}) if user else None
+    can_review = False
+    if user and c.get("owner_id") != user["id"]:
+        enr = await db.enrollments.find_one({"user_id": user["id"], "course_id": course_id}, {"passed": 1})
+        can_review = bool(enr and enr.get("passed"))
+    for r in items:
+        r.pop("user_id", None)
+    return {"summary": {"average": c.get("rating_avg"), "count": c.get("rating_count", 0),
+                        "distribution": c.get("rating_dist") or {str(i): 0 for i in range(1, 6)}},
+            "items": items, "mine": mine, "can_review": can_review}
+
+
+@router.put("/courses/{course_id}/review")
+async def write_review(course_id: str, body: ReviewIn, user=Depends(get_user)):
+    c = await _course(course_id)
+    if c.get("owner_id") == user["id"]:
+        raise HTTPException(400, "You can't review your own course")
+    enr = await db.enrollments.find_one({"user_id": user["id"], "course_id": course_id}, {"passed": 1})
+    if not (enr and enr.get("passed")):
+        raise HTTPException(403, "Pass the course quiz to leave a review")
+    existing = await db.reviews.find_one({"course_id": course_id, "user_id": user["id"]})
+    doc = {"rating": body.rating, "text": body.text.strip(), "user_name": user["name"],
+           "avatar_url": user.get("avatar_url"), "updated_at": now_iso()}
+    if existing:
+        await db.reviews.update_one({"id": existing["id"]}, {"$set": doc})
+        rid = existing["id"]
+    else:
+        rid = uid()
+        await db.reviews.insert_one({"id": rid, "course_id": course_id, "user_id": user["id"],
+                                     "created_at": now_iso(), **doc})
+    summary = await _refresh_rating(c)
+    review = await db.reviews.find_one({"id": rid}, {"_id": 0, "user_id": 0})
+    return {"review": review, "summary": summary}
+
+
+@router.delete("/courses/{course_id}/review")
+async def delete_review(course_id: str, user=Depends(get_user)):
+    c = await _course(course_id)
+    res = await db.reviews.delete_one({"course_id": course_id, "user_id": user["id"]})
+    if not res.deleted_count:
+        raise HTTPException(404, "You haven't reviewed this course")
+    return {"summary": await _refresh_rating(c)}
 
 
 @router.get("/me")

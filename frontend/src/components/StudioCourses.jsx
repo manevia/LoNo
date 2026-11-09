@@ -55,6 +55,7 @@ export default function StudioCourses() {
                   <div className="text-xs text-gray-400 mt-1">
                     {c.lessons} lessons / {c.questions} questions
                     {c.status === "published" && ` / ${c.enrolled} enrolled / ${c.certificates_issued} passed`}
+                    {c.rating_count > 0 && ` / ★ ${c.rating_avg.toFixed(1)} (${c.rating_count})`}
                     {c.status === "draft" && !c.ready && " / not ready to publish yet"}
                   </div>
                 </div>

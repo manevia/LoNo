@@ -25,3 +25,5 @@ async def ensure_indexes():
     await db.courses.create_index("id", unique=True)
     await db.enrollments.create_index([("user_id", 1), ("course_id", 1)], unique=True)
     await db.certificates.create_index("id", unique=True)
+    await db.reviews.create_index([("course_id", 1), ("user_id", 1)], unique=True)
+    await db.reviews.create_index([("course_id", 1), ("updated_at", -1)])
