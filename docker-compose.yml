@@ -5,6 +5,24 @@ services:
     restart: unless-stopped
     volumes: [mongo-data:/data/db]
 
+  media:
+    # Live ingest (RTMP/RTMPS/SRT/WebRTC) and HLS for LoNo broadcasts. See docs/BROADCAST.md.
+    image: bluenviron/mediamtx:1.9.3
+    restart: unless-stopped
+    volumes:
+      - ./media/mediamtx.yml:/mediamtx.yml:ro
+      - ./media/certs:/certs:ro
+    environment:
+      MTX_AUTHHTTPADDRESS: http://backend:8001/api/broadcast/mtx/auth
+      MTX_APIADDRESS: ":9997"
+      MTX_HLSADDRESS: ":8888"
+    ports:
+      - "1935:1935"         # RTMP ingest
+      - "1936:1936"         # RTMPS ingest (needs certs in media/certs)
+      - "8890:8890/udp"     # SRT ingest
+      - "8889:8889"         # WebRTC (browser camera) ingest
+      - "8189:8189/udp"
+
   backend:
     build: ./backend
     restart: unless-stopped
@@ -14,8 +32,14 @@ services:
     environment:
       MONGO_URL: mongodb://mongo:27017
       LOCAL_STORAGE_DIR: /app/data/uploads
+      MEDIA_ENABLED: "true"
+      MEDIA_API_URL: http://media:9997
+      MEDIA_HLS_URL: http://media:8888
+      MEDIA_WEBRTC_URL: http://media:8889
+      MEDIA_RTMP_INTERNAL: rtmp://media:1935
+      RECORDINGS_DIR: /app/data/recordings
     volumes: [uploads:/app/data/uploads]
-    depends_on: [mongo]
+    depends_on: [mongo, media]
 
   web:
     build:

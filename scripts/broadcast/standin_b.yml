@@ -1,0 +1,25 @@
+logLevel: warn
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: api
+api: yes
+apiAddress: 127.0.0.1:9999
+rtmp: yes
+rtmpAddress: 127.0.0.1:3935
+rtmpEncryption: optional
+rtmpsAddress: 127.0.0.1:3936
+rtmpServerKey: ./certs/server.key
+rtmpServerCert: ./certs/server.crt
+srt: yes
+srtAddress: 127.0.0.1:9891
+hls: no
+webrtc: no
+rtsp: no
+paths:
+  all_others:

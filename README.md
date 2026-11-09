@@ -75,6 +75,10 @@ See **[docs/DEVICES.md](docs/DEVICES.md)** for each device and **[docs/TV-REMOTE
 
 Installing on phones and TVs needs LoNo on a public **HTTPS** address. See Step 0 in the guide.
 
+## Live broadcasting (creators)
+
+Creators can go live on LoNo from OBS or any RTMP/RTMPS/SRT encoder. They can simulcast to YouTube, Facebook, Twitch, Kick, X, TikTok, LinkedIn, Instagram or any custom server, with a separate status and retry for each destination, and record the broadcast. Off until enabled; see **[docs/BROADCAST.md](docs/BROADCAST.md)**. Phase 1 (the API) is complete; Creator Studio screens come next.
+
 ## Turning features on
 
 Everything below is optional. Without a key, the feature hides itself or explains that it's off.

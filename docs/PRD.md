@@ -94,6 +94,14 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Back closes overlays first and restores focus to the item the viewer came from; media and channel keys for Tizen, webOS, Android TV and HbbTV
 - Simulcast audit: the Studio's 10 destinations were display-only; no simulcast was functional before this release
 
+## v2.8 (Nov 2026): Broadcasting phase 1
+- MediaMTX media server (RTMP / RTMPS / SRT ingest, HLS out, WebRTC ready); LoNo API validates stream keys (http auth)
+- Rotatable per-creator stream key; destinations by server URL + key, encrypted at rest, write-only
+- Private test sessions with signed preview; go live on LoNo Live TV/Radio; idempotent create/start/stop
+- Simulcast relays (ffmpeg stream copy), one per destination, with live/failed state, readable errors, targeted retry, auto-resume after encoder reconnect
+- Recording (fragmented MP4 parts joined at the end), private by default; publish now, schedule or keep private
+- Session events for webhooks; no stream keys in logs; 38/38 integration checks with stand-in platforms
+
 ## Backlog (post-MVP priorities)
 - **P1**: Offline downloads for audio and video; HLS transcoding of uploads (Mux/Cloudflare Stream); Apple TV and Roku native apps; email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction
