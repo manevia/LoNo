@@ -6,6 +6,8 @@ Status per target: idle → connecting → live → (failed | stopped | waiting)
 import asyncio
 import logging
 import re
+import signal
+import sys
 import time
 from dataclasses import dataclass, field
 
@@ -27,12 +29,13 @@ class Relay:
     started_at: float | None = None
     live_at: float | None = None
     out_seconds: float = 0.0
+    auto_retries: int = 0          # automatic reconnects after a drop (reset after a minute live)
     proc: asyncio.subprocess.Process | None = None
     task: asyncio.Task | None = None
     stderr_tail: list[str] = field(default_factory=list)
 
     def view(self) -> dict:
-        return {"state": self.state, "error": self.error, "attempts": self.attempts,
+        return {"state": self.state, "error": self.error, "attempts": self.attempts, "auto_retries": self.auto_retries,
                 "live_since": self.live_at, "sent_seconds": round(self.out_seconds, 1)}
 
 
@@ -57,6 +60,23 @@ def explain(stderr: str) -> str:
     return "The stream to this destination stopped."
 
 
+BACKOFF = (2, 5, 10)
+
+
+def _die_with_parent():
+    """Linux: have the kernel stop this ffmpeg if the API process dies (even with
+    kill -9), so a crashed LoNo never leaves streams running to social platforms.
+    After a restart, the media monitor resumes live sessions' destinations."""
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG
+    except Exception:
+        pass
+
+
+PREEXEC = _die_with_parent if sys.platform.startswith("linux") else None
+
+
 class RelayManager:
     def __init__(self):
         self.relays: dict[tuple[str, str], Relay] = {}
@@ -75,11 +95,12 @@ class RelayManager:
     async def start(self, session_id: str, target_id: str, args: list[str], secrets: tuple[str, ...] = ()):
         key = (session_id, target_id)
         old = self.relays.get(key)
-        if old and old.state in ("connecting", "live"):
-            return old  # already running: starting twice is safe
+        if old and old.state in ("connecting", "live", "retrying"):
+            return old  # already running (or reconnecting): starting twice is safe
         if old:
             await self._kill(old)
         r = Relay(session_id, target_id, args, secrets, attempts=(old.attempts if old else 0))
+        r.task = None
         self.relays[key] = r
         r.task = asyncio.create_task(self._run(r))
         return r
@@ -89,7 +110,8 @@ class RelayManager:
         r.state, r.error, r.started_at, r.live_at, r.out_seconds = "connecting", None, time.time(), None, 0.0
         try:
             r.proc = await asyncio.create_subprocess_exec(
-                config.FFMPEG_BIN, *r.args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                config.FFMPEG_BIN, *r.args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                preexec_fn=PREEXEC)
         except FileNotFoundError:
             r.state, r.error = "failed", "ffmpeg isn't installed on the server."
             return
@@ -110,9 +132,24 @@ class RelayManager:
         if r.state == "stopped":
             return
         tail = redact("\n".join(r.stderr_tail[-20:]), *r.secrets)
-        r.state = "failed"
         r.error = explain(tail) if code != 0 or r.live_at is None else "The stream to this destination ended."
         log.warning("relay %s/%s exited (%s): %s", r.session_id, r.target_id, code, r.error)
+        # A destination that was live and then dropped is usually a transient network or
+        # platform hiccup: reconnect automatically (2 s, 5 s, 10 s). A destination that never
+        # connected usually has a wrong URL or key: fail at once so the creator can fix it.
+        if r.live_at is not None and time.time() - r.live_at > 60:
+            r.auto_retries = 0
+        if r.live_at is not None and r.auto_retries < len(BACKOFF):
+            r.state = "retrying"
+            await self._notify(r)
+            await asyncio.sleep(BACKOFF[r.auto_retries])
+            if r.state != "retrying":          # stopped or manually retried meanwhile
+                return
+            r.auto_retries += 1
+            r.stderr_tail.clear()
+            await self._run(r)
+            return
+        r.state = "failed"
         await self._notify(r)
 
     async def _read_err(self, r: Relay):

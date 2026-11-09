@@ -1,4 +1,9 @@
-"""Broadcast integration test (run from repo root; see docs/BROADCAST.md "Testing"): real MediaMTX, ffmpeg as the encoder, stand-in
+"""Broadcast integration test. Setup (see docs/BROADCAST.md "Testing"):
+  - LoNo API with MEDIA_ENABLED=true and SIGNUPS_PER_IP_PER_HOUR raised, LoNo's MediaMTX,
+    and stand-in A:  mediamtx scripts/broadcast/standin_a.yml  (run from scripts/broadcast)
+  - certificates for the RTMPS stand-ins in scripts/broadcast/certs (server.key, server.crt)
+  - env: MEDIAMTX=path/to/mediamtx, API_LOG, MEDIA_LOG
+ real MediaMTX, ffmpeg as the encoder, stand-in
 platform receivers (MediaMTX) for YouTube (RTMP), Facebook (RTMPS), Twitch
 (initially unreachable) and Custom SRT."""
 import json, os, signal, subprocess, time, uuid
@@ -123,7 +128,9 @@ check("Other destinations keep running", all(ds[p]["state"] == "live" for p in (
 check("Error message doesn't contain the stream key", "SECRET" not in json.dumps(ds))
 
 # targeted retry after the platform comes back
-B_mtx = subprocess.Popen([os.environ.get("MEDIAMTX", "mediamtx"), "scripts/broadcast/standin_b.yml"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+HERE = os.path.dirname(os.path.abspath(__file__))
+B_mtx = subprocess.Popen([os.environ.get("MEDIAMTX", "mediamtx"), "standin_b.yml"], cwd=HERE,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 time.sleep(2)
 yt_before = dstate()["youtube"]
 c.post(f"{API}/broadcast/sessions/{s['id']}/destinations/{D['twitch']['id']}/retry", headers=H)
@@ -145,7 +152,7 @@ os.killpg(enc.pid, signal.SIGTERM)
 wait(lambda: not c.get(f"{API}/broadcast/sessions/{s['id']}", headers=H).json()["feed"].get("ready") or None, 15)
 time.sleep(3)
 ds = dstate()
-check("Encoder drop: destinations wait for the feed", all(d["state"] in ("waiting", "stopped", "failed") for d in ds.values()), json.dumps({p: d["state"] for p, d in ds.items()}))
+check("Encoder drop: destinations wait for the feed", all(d["state"] in ("waiting", "stopped", "failed", "retrying") for d in ds.values()), json.dumps({p: d["state"] for p, d in ds.items()}))
 enc = encoder(f"{ing['rtmp']['server']}/{ing['rtmp']['stream_key']}")
 wait(lambda: all(d["state"] == "live" for d in dstate().values()) or None, 30)
 ds = dstate()

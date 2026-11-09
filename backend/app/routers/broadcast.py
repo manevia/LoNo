@@ -29,7 +29,7 @@ from ..broadcast.secrets_box import decrypt, encrypt, hash_key, hint, new_stream
 from ..db import db
 from ..security import get_user
 from ..storage import storage
-from ..util import now, now_iso, uid
+from ..util import now, now_iso, spawn, uid
 from .creator import _channel_for
 
 router = APIRouter(prefix="/broadcast", tags=["broadcast"])
@@ -295,7 +295,7 @@ async def create_session_for(user, body: SessionIn, idempotency_key: str | None 
     await db.broadcast_sessions.insert_one(dict(s))
     await audit("broadcast_session_created", user, target=s["id"], details={"test": body.test, "destinations": len(dests)})
     if config.MEDIA_ENABLED:
-        asyncio.create_task(ensure_media_path(dict(s)))
+        spawn(ensure_media_path(dict(s)))
     return s
 
 
@@ -366,7 +366,7 @@ async def stop_session_for(user, session_id: str) -> dict:
     s = await _session(session_id, user)
     await _event(s, "broadcast.ended", title=s["title"])
     if s.get("record") and s.get("started_at"):
-        asyncio.create_task(_finalize_recording(s))
+        spawn(_finalize_recording(s))
     return s
 
 
@@ -595,12 +595,12 @@ async def on_feed_change(path: str, ready: bool):
 
 
 async def on_relay_change(session_id: str, target: str, state: str, error: str | None):
-    if not target.startswith("dest:") or state not in ("live", "failed"):
+    if not target.startswith("dest:") or state not in ("live", "failed", "retrying"):
         return
     s = await db.broadcast_sessions.find_one({"id": session_id}, {"_id": 0})
     if s and s["status"] == "live":
         d = next((x for x in s["destinations"] if f"dest:{x['id']}" == target), {})
-        await _event(s, "destination.live" if state == "live" else "destination.failed",
+        await _event(s, {"live": "destination.live", "failed": "destination.failed", "retrying": "destination.reconnecting"}[state],
                      destination_id=d.get("id"), platform=d.get("platform"), error=error)
 
 

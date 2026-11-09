@@ -107,6 +107,14 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Browser camera via WHIP proxied through the API (key stays server-side); browser codecs (VP8/Opus) converted once to H.264/AAC for viewers, destinations and recording
 - Fix: Permissions-Policy now allows camera/mic/screen for LoNo itself
 
+## v3.0 (Nov 2026): Live Control Room
+- Rooms with secret, expiring contributor invitations (phone/laptop, or encoder for crews and venues); private waiting area
+- Producer Control Room: multiview with meters, Preview/On Air with TAKE, single/split/clip/standby scenes, lower thirds with optional location, cue messages, talkback, mute, remove
+- Contributor page: ON AIR / cued indicators, mix-minus audio return, audio-only, auto and manual reconnect
+- One continuous program composited in the producer's browser into the broadcast session (LoNo + destinations)
+- Automatic fallback to the anchor/standby on network evidence; destinations reconnect automatically after a drop
+- Acceptance test 24/24 (anchor + 2 reporters in separate processes, drop and reconnect, mix-minus verified with ffmpeg)
+
 ## Backlog (post-MVP priorities)
 - **P1**: Offline downloads for audio and video; HLS transcoding of uploads (Mux/Cloudflare Stream); Apple TV and Roku native apps; email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction

@@ -24,16 +24,17 @@ function waitForIce(pc, ms = 2500) {
   });
 }
 
-export async function publishWhip({ video, audio, onState }) {
+export async function publishWhip({ video, audio, onState, endpoint = "/broadcast/whip", client = api }) {
   const pc = new RTCPeerConnection({ iceServers: [] });
   const senders = {};
-  if (video) senders.video = pc.addTransceiver(video, { direction: "sendonly", sendEncodings: [{ maxBitrate: 2_500_000 }] }).sender;
+  // Always reserve a video slot so audio-only senders can switch video back on without reconnecting.
+  senders.video = pc.addTransceiver(video || "video", { direction: "sendonly", sendEncodings: [{ maxBitrate: 2_500_000 }] }).sender;
   if (audio) senders.audio = pc.addTransceiver(audio, { direction: "sendonly" }).sender;
   preferH264(pc);
   pc.addEventListener("connectionstatechange", () => onState?.(pc.connectionState));
   await pc.setLocalDescription(await pc.createOffer());
   await waitForIce(pc);
-  const { data } = await api.post("/broadcast/whip", pc.localDescription.sdp, {
+  const { data } = await client.post(endpoint, pc.localDescription.sdp, {
     headers: { "Content-Type": "application/sdp" }, transformRequest: [(d) => d], responseType: "text",
   });
   await pc.setRemoteDescription({ type: "answer", sdp: data });
@@ -58,7 +59,28 @@ export async function publishWhip({ video, audio, onState }) {
     },
     async stop() {
       pc.close();
-      try { await api.delete("/broadcast/whip"); } catch { /* already gone */ }
+      if (endpoint === "/broadcast/whip") { try { await client.delete(endpoint); } catch { /* already gone */ } }
     },
   };
+}
+
+
+/** Receive a feed with WHEP (WebRTC-HTTP egress). Returns the MediaStream as tracks arrive. */
+export async function playWhep({ endpoint, client = api, onState, audioOnly = false }) {
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  if (!audioOnly) pc.addTransceiver("video", { direction: "recvonly" });
+  pc.addTransceiver("audio", { direction: "recvonly" });
+  const stream = new MediaStream();
+  pc.addEventListener("track", (e) => { if (!stream.getTracks().includes(e.track)) stream.addTrack(e.track); });
+  pc.addEventListener("connectionstatechange", () => onState?.(pc.connectionState));
+  await pc.setLocalDescription(await pc.createOffer());
+  await waitForIce(pc);
+  const { data } = await client.post(endpoint, pc.localDescription.sdp, {
+    headers: { "Content-Type": "application/sdp" }, transformRequest: [(d) => d], responseType: "text",
+  });
+  await pc.setRemoteDescription({ type: "answer", sdp: data });
+  // Receivers have their tracks as soon as the answer is applied: hand over a complete
+  // stream now, so audio isn't missed by code that wires it up immediately.
+  for (const r of pc.getReceivers()) if (r.track && !stream.getTracks().includes(r.track)) stream.addTrack(r.track);
+  return { pc, stream, stop() { pc.close(); } };
 }

@@ -16,11 +16,11 @@ const card = "rounded-2xl bg-[#121212] border border-white/10 p-5";
 const field = "w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm";
 const STATE = {
   live: ["Live", "text-[#34C759] border-[#34C759]/40 bg-[#34C759]/10"], connecting: ["Connecting", "text-[#FFB000] border-[#FFB000]/40 bg-[#FFB000]/10"],
-  failed: ["Failed", "text-[#FF8A82] border-[#FF3B30]/40 bg-[#FF3B30]/10"], waiting: ["Waiting for feed", "text-gray-300 border-white/15 bg-white/5"],
+  failed: ["Failed", "text-[#FF8A82] border-[#FF3B30]/40 bg-[#FF3B30]/10"], retrying: ["Reconnecting", "text-[#FFB000] border-[#FFB000]/40 bg-[#FFB000]/10"], waiting: ["Waiting for feed", "text-gray-300 border-white/15 bg-white/5"],
   stopped: ["Stopped", "text-gray-400 border-white/15"], idle: ["Not started", "text-gray-400 border-white/15"],
 };
 const EVENT = { "broadcast.started": "Broadcast started", "broadcast.ended": "Broadcast ended", "stream.connected": "Feed connected",
-  "stream.disconnected": "Feed disconnected", "destination.live": "Destination live", "destination.failed": "Destination failed", "recording.ready": "Recording ready" };
+  "stream.disconnected": "Feed disconnected", "destination.live": "Destination live", "destination.failed": "Destination failed", "destination.reconnecting": "Destination reconnecting", "recording.ready": "Recording ready" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**

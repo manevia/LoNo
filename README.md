@@ -11,7 +11,7 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 
 - **Backend:** FastAPI + MongoDB (Motor), in `backend/`
 - **Frontend:** React 19 + Tailwind + shadcn/ui, in `frontend/`
-- **Version:** 2.7 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection, account controls, an admin console, an installable app with TV mode and adaptive streaming, and full TV-remote control of live TV, radio and on demand)
+- **Version:** 3.0 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection, account controls, an admin console, an installable app with TV mode and adaptive streaming, full TV-remote control of live TV, radio and on demand, Live Studio broadcasting with simulcast, and a Live Control Room for multi-location productions)
 
 ## Run it
 
@@ -77,7 +77,7 @@ Installing on phones and TVs needs LoNo on a public **HTTPS** address. See Step 
 
 ## Live broadcasting (creators)
 
-Creators can go live on LoNo from OBS or any RTMP/RTMPS/SRT encoder. They can simulcast to YouTube, Facebook, Twitch, Kick, X, TikTok, LinkedIn, Instagram or any custom server, with a separate status and retry for each destination, and record the broadcast. Off until enabled; see **[docs/BROADCAST.md](docs/BROADCAST.md)**. Creators broadcast from **Creator Studio → Open Live Studio**, using their camera and microphone or an external encoder.
+Creators can go live on LoNo from OBS or any RTMP/RTMPS/SRT encoder. They can simulcast to YouTube, Facebook, Twitch, Kick, X, TikTok, LinkedIn, Instagram or any custom server, with a separate status and retry for each destination, and record the broadcast. Off until enabled; see **[docs/BROADCAST.md](docs/BROADCAST.md)**. Creators broadcast from **Creator Studio → Open Live Studio**, using their camera and microphone or an external encoder. Productions with an anchor and field reporters use the **Live Control Room**; see **[docs/CONTROL-ROOM.md](docs/CONTROL-ROOM.md)**.
 
 ## Turning features on
 

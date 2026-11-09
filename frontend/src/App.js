@@ -47,6 +47,8 @@ const Settings = page(() => import("@/pages/Settings"));
 const Terms = page(() => import("@/pages/Terms"));
 const LivePlayer = page(() => import("@/pages/LivePlayer"));
 const LiveStudio = page(() => import("@/pages/LiveStudio"));
+const Join = page(() => import("@/pages/Join"));
+const ControlRoom = page(() => import("@/pages/ControlRoom"));
 const Admin = page(() => import("@/pages/Admin"));
 
 const PageLoading = () => (
@@ -92,6 +94,8 @@ export default function App() {
           <Route path="/channel/:id" element={<Shell><Channel /></Shell>} />
           <Route path="/studio" element={<Protected><Shell><Studio /></Shell></Protected>} />
           <Route path="/wallet" element={<Protected><Shell><Wallet /></Shell></Protected>} />
+          <Route path="/join/:token" element={<Join />} />
+          <Route path="/studio/control/:roomId?" element={<Protected><Shell><ControlRoom /></Shell></Protected>} />
           <Route path="/studio/live" element={<Protected><Shell><LiveStudio /></Shell></Protected>} />
           <Route path="/studio/courses/:id" element={<Protected><Shell><CourseEditor /></Shell></Protected>} />
           <Route path="/live/play/:id" element={<Suspense fallback={<div className="fixed inset-0 bg-black" />}><LivePlayer /></Suspense>} />

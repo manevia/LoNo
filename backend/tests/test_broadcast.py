@@ -117,3 +117,29 @@ def test_whip_needs_a_session(client, media_on):
     u = make_user(client)
     r = client.post("/api/broadcast/whip", headers={**u["h"], "Content-Type": "application/sdp"}, content=b"v=0\r\n")
     assert r.status_code == 409
+
+
+def test_relay_reconnects_only_after_being_live():
+    """A destination that was live and dropped reconnects automatically (3 tries);
+    one that never connected fails at once (likely a wrong URL or key)."""
+    import asyncio, shutil
+    from app.broadcast import relays
+    if not shutil.which("ffmpeg"):
+        return
+    relays.BACKOFF, saved = (0.2, 0.2, 0.2), relays.BACKOFF
+
+    async def run():
+        m = relays.RelayManager()
+        await m.start("s", "bad", ["-hide_banner", "-loglevel", "error", "-i", "rtmp://127.0.0.1:1/x", "-f", "null", "-"])
+        await m.start("s", "drop", ["-hide_banner", "-loglevel", "error", "-progress", "pipe:1", "-re", "-f", "lavfi",
+                                    "-i", "testsrc=size=160x120:rate=10", "-t", "1.2", "-f", "null", "-"])
+        await asyncio.sleep(10)
+        v = m.get("s")
+        await m.stop_all()
+        return v
+    try:
+        v = asyncio.run(run())
+    finally:
+        relays.BACKOFF = saved
+    assert v["bad"]["state"] == "failed" and v["bad"]["auto_retries"] == 0
+    assert v["drop"]["state"] == "failed" and v["drop"]["auto_retries"] == 3 and v["drop"]["attempts"] == 4
