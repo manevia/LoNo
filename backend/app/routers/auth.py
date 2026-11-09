@@ -34,7 +34,7 @@ class GoogleIn(BaseModel):
 
 
 async def create_user(email: str, name: str, provider: str, password: str | None = None,
-                      avatar_url: str | None = None) -> dict:
+                      avatar_url: str | None = None, record_consent: bool = True) -> dict:
     user_id = uid()
     consent = {"type": "terms", "version": config.TERMS_VERSION, "at": now_iso(), "method": provider}
     doc = {
@@ -42,7 +42,7 @@ async def create_user(email: str, name: str, provider: str, password: str | None
         "avatar_url": avatar_url or f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_id}",
         "role": "viewer", "provider": provider, "plan": "free", "created_at": now_iso(),
         "wallet": new_wallet(), "watch_history": [], "subscribed_channels": [],
-        "liked": [], "my_list": [], "consents": [consent],
+        "liked": [], "my_list": [], "consents": [consent] if record_consent else [],
     }
     if password:
         doc["password_hash"] = hash_password(password)
@@ -50,7 +50,7 @@ async def create_user(email: str, name: str, provider: str, password: str | None
     if config.SIGNUP_BONUS > 0:
         await credit(user_id, config.SIGNUP_BONUS, "signup_bonus", "Welcome bonus")
     await audit("account_created", {"id": user_id, "name": name.strip()}, target=user_id,
-                details={"provider": provider, "terms_version": config.TERMS_VERSION})
+                details={"provider": provider, "terms_version": config.TERMS_VERSION if record_consent else None})
     return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
 
 
@@ -64,7 +64,7 @@ async def register(body: RegisterIn, request: Request):
         raise HTTPException(400, "That email already has an account. Sign in instead.")
     user = await create_user(body.email, body.name, "email", password=body.password)
     signups.hit(ip)
-    return {"token": make_token(user["id"]), "user": user}
+    return {"token": make_token(user["id"]), "user": await me_view(user)}
 
 
 @router.post("/login")
@@ -80,7 +80,7 @@ async def login(body: LoginIn, request: Request):
     login_failures.reset(key)
     if u.get("suspended"):
         raise HTTPException(403, "This account is suspended. Contact support if you think this is a mistake.")
-    return {"token": make_token(u["id"]), "user": clean(u)}
+    return {"token": make_token(u["id"]), "user": await me_view(u)}
 
 
 @router.post("/google")
@@ -101,16 +101,23 @@ async def google(body: GoogleIn):
                               avatar_url=info.get("picture"))
     if u.get("suspended"):
         raise HTTPException(403, "This account is suspended. Contact support if you think this is a mistake.")
-    return {"token": make_token(u["id"]), "user": u}
+    return {"token": make_token(u["id"]), "user": await me_view(u)}
 
 
-@router.get("/me")
-async def me(user=Depends(get_user)):
+async def me_view(user: dict) -> dict:
+    """The signed-in user as the app sees it. Login, sign-up, Google and /me all return
+    this, so flags like is_admin and needs_terms are right straight after signing in."""
+    user = clean(user)
     has_pw = await db.users.count_documents({"id": user["id"], "password_hash": {"$exists": True}})
     accepted = any(c.get("type") == "terms" and c.get("version") == config.TERMS_VERSION
                    for c in user.get("consents", []))
     return {**user, "has_password": bool(has_pw), "is_admin": is_admin(user),
             "terms_version": config.TERMS_VERSION, "needs_terms": not accepted}
+
+
+@router.get("/me")
+async def me(user=Depends(get_user)):
+    return await me_view(user)
 
 
 @router.post("/accept-terms")

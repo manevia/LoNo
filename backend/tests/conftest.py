@@ -10,7 +10,7 @@ os.environ.update({
     "MONGO_URL": "mongomock://", "DB_NAME": "lono_test", "JWT_SECRET": "test-secret",
     "LOCAL_STORAGE_DIR": tempfile.mkdtemp(), "ANTHROPIC_API_KEY": "", "TRANSCRIBE_API_KEY": "",
     "OPENAI_API_KEY": "", "STRIPE_API_KEY": "", "GOOGLE_CLIENT_ID": "",
-    "SIGNUPS_PER_IP_PER_HOUR": "100000", "ADMIN_EMAILS": "admin@example.com",
+    "SIGNUPS_PER_IP_PER_HOUR": "100000", "ADMIN_EMAILS": "admin@example.com", "ADMIN_PASSWORD": "Adm1n-Test-Pass",
 })
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -36,9 +36,6 @@ def user(client):
 
 @pytest.fixture(scope="session")
 def admin(client):
-    r = client.post("/api/auth/register", json={"email": "admin@example.com", "password": "Passw0rd!",
-                                                "name": "Admin", "accept_terms": True})
-    if r.status_code != 200:
-        r = client.post("/api/auth/login", json={"email": "admin@example.com", "password": "Passw0rd!"})
-    d = r.json()
+    # created by the server at startup from ADMIN_EMAILS / ADMIN_PASSWORD
+    d = client.post("/api/auth/login", json={"email": "admin@example.com", "password": "Adm1n-Test-Pass"}).json()
     return {"id": d["user"]["id"], "h": {"Authorization": f"Bearer {d['token']}"}}

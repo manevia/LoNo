@@ -74,8 +74,14 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Compliance records: versioned terms consent at sign-up and re-consent banner; audit log of consents, data downloads, deletions, password changes and admin actions; CSV export with formula-injection protection; erasure evidenced by email hash only
 - Terms page with plain-language $LONO disclosure; disclosure line on the token page
 
+## v2.5.1 (Nov 2026)
+- Admin accounts are created by the server at startup from ADMIN_EMAILS (msf@ciu.edu.lr), with a one-time password in the server log; an email alone never grants admin, since emails aren't verified yet
+- `python -m app.admin_setup` to grant/remove admin and reset passwords on a real database
+- Support contact lono@ciu.edu.lr on the Terms page
+- Fix: sign-in responses carry is_admin / needs_terms, so the Admin menu and terms banner appear without a reload
+
 ## Backlog (post-MVP priorities)
-- **P1**: KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
+- **P1**: Email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction
 - **P2**: Real blockchain settlement layer, WalletConnect / MetaMask integration
 - **P2**: Marketplace (NFT, merch, tickets, licenses), programmatic ads platform, developer portal + SDK

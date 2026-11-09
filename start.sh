@@ -39,6 +39,8 @@ JWT_SECRET=$(secret)
 CORS_ORIGINS=*
 PUBLIC_ORIGIN=http://localhost:$PORT
 STORAGE_BACKEND=local
+ADMIN_EMAILS=msf@ciu.edu.lr
+SUPPORT_EMAIL=lono@ciu.edu.lr
 ENV
   say "Created backend/.env (in-memory database)."
 fi

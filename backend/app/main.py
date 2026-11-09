@@ -8,6 +8,7 @@ from starlette.middleware.cors import CORSMiddleware
 from . import config
 from .db import client, ensure_indexes
 from .routers import account, admin, ai, auth, content, creator, creator_courses, files, governance, learn, payments, wallet, watch
+from .admin_setup import bootstrap_admins
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
     if config.SEED_DEMO_DATA:
         await seed_catalogue()
         await seed_courses()
+    await bootstrap_admins()
     yield
     client.close()
 

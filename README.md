@@ -190,7 +190,23 @@ Every response also carries security headers (`X-Content-Type-Options`, `X-Frame
 
 ## Admin console and compliance records
 
-**Admins:** add their email addresses to `ADMIN_EMAILS` in `backend/.env`, separated by commas, and restart. No button in the app grants admin rights, so nobody can promote themselves. Admins see **Admin** in the account menu. It has five sections:
+**Admins:** LoNo doesn't verify email addresses yet, so an address alone never grants admin rights. Instead:
+
+1. Put the admin's address in `ADMIN_EMAILS` in `backend/.env`; this project uses `msf@ciu.edu.lr`.
+2. On startup, **the server creates that account itself**, so nobody can register the address first. It prints a one-time password in the server window, or in `docker compose logs backend` for Docker.
+3. Sign in with that password, change it under **Profile → Settings**, and accept the terms.
+4. If the address already belongs to an ordinary account, it's **not** promoted automatically, because someone else may have registered it. The server log says so. With a real MongoDB, grant it once you're sure it's yours:
+
+```bash
+cd backend
+python -m app.admin_setup make-admin someone@example.org     # Windows: .venv\Scripts\python -m ...
+python -m app.admin_setup remove-admin someone@example.org
+python -m app.admin_setup reset-password someone@example.org  # forgot the admin password
+```
+
+With the in-memory database, the admin account and a new one-time password are created on every start, since all data resets.
+
+Admins see **Admin** in the account menu. It has five sections:
 
 | Section | What it's for |
 |---|---|
@@ -204,7 +220,7 @@ Every response also carries security headers (`X-Content-Type-Options`, `X-Frame
 
 **Erasure evidence:** when someone deletes their account, the audit log keeps only their internal ID and a SHA-256 fingerprint of their email, never the email itself. Their name is removed from earlier log entries.
 
-**Before launch:** the Terms page (`frontend/src/pages/Terms.jsx`) is a plain-language starting template. Have a lawyer review it for the countries you operate in, and set `SUPPORT_EMAIL` so users know where to send privacy requests.
+**Before launch:** the Terms page (`frontend/src/pages/Terms.jsx`) is a plain-language starting template. Have a lawyer review it for the countries you operate in, and set `SUPPORT_EMAIL` (this project uses `lono@ciu.edu.lr`) so users know where to send privacy requests.
 
 ## Before going live
 

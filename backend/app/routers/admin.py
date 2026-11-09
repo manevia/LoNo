@@ -120,7 +120,7 @@ async def _set_suspended(user_id: str, value: bool, admin: dict, reason: str = "
     if not u:
         raise HTTPException(404, "User not found")
     if value and is_admin(u):
-        raise HTTPException(400, "Admins can't be suspended here. Remove them from ADMIN_EMAILS first.")
+        raise HTTPException(400, "Admins can't be suspended. Remove their admin role first (python -m app.admin_setup remove-admin <email>).")
     await db.users.update_one({"id": user_id}, {"$set": {"suspended": value, "suspended_reason": reason if value else None}})
     await audit("user_suspended" if value else "user_reinstated", admin, target=user_id, details={"reason": reason})
     return {"ok": True, "suspended": value}

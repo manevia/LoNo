@@ -40,7 +40,9 @@ async def get_user_optional(creds: Optional[HTTPAuthorizationCredentials] = Depe
 
 
 def is_admin(user: dict | None) -> bool:
-    return bool(user) and (user.get("role") == "admin" or user.get("email", "").lower() in config.ADMIN_EMAILS)
+    # Only the stored role counts. Emails aren't verified, so an address in
+    # ADMIN_EMAILS alone must never grant access (anyone could sign up with it).
+    return bool(user) and user.get("role") == "admin"
 
 
 async def get_user(user=Depends(get_user_optional)):

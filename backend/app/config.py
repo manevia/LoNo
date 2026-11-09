@@ -64,7 +64,11 @@ WATCH_REWARD_CAP_PER_TITLE = float(_env("WATCH_REWARD_CAP_PER_TITLE", "10"))
 WATCH_REWARD_DAILY_CAP = float(_env("WATCH_REWARD_DAILY_CAP", "60"))
 HEARTBEAT_SEC = int(_env("HEARTBEAT_SEC", "30"))
 # Administration and compliance
+# Admin accounts are created by the server at startup (see app/admin_setup.py), so nobody
+# can register an admin address first. ADMIN_PASSWORD is optional: without it a random
+# password is generated and printed once in the server log.
 ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS").split(",") if e.strip()}
+ADMIN_PASSWORD = _env("ADMIN_PASSWORD")
 TERMS_VERSION = _env("TERMS_VERSION", "2026-11")  # bump when the terms change; new consent is recorded
 SUPPORT_EMAIL = _env("SUPPORT_EMAIL")              # shown on the Terms page for privacy requests
 

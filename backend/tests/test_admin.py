@@ -114,3 +114,45 @@ def test_republish_clears_moderation_note(client, admin):
     client.post(f"/api/admin/courses/{c['id']}/unpublish", json={"reason": "Fix the quiz"}, headers=admin["h"])
     client.post(f"/api/creator/courses/{c['id']}/publish", headers=owner["h"])
     assert client.get(f"/api/creator/courses/{c['id']}", headers=owner["h"]).json()["moderation_note"] is None
+
+
+def test_admin_account_is_server_created(client, admin):
+    # the address can't be registered by someone else
+    r = client.post("/api/auth/register", json={"email": "admin@example.com", "password": "Passw0rd!",
+                                                "name": "Impostor", "accept_terms": True})
+    assert r.status_code == 400
+    me = client.get("/api/auth/me", headers=admin["h"]).json()
+    assert me["is_admin"] is True and me["role"] == "admin"
+    assert me["needs_terms"] is True  # the admin accepts the terms personally on first sign-in
+    assert client.post("/api/auth/accept-terms", headers=admin["h"]).json()["ok"]
+    assert client.get("/api/auth/me", headers=admin["h"]).json()["needs_terms"] is False
+
+
+def test_listed_email_alone_never_grants_admin(client, monkeypatch):
+    import asyncio
+    from app import config
+    from app.admin_setup import bootstrap_admins
+    u = make_user(client, "Squatter")
+    email = client.get("/api/auth/me", headers=u["h"]).json()["email"]
+    monkeypatch.setattr(config, "ADMIN_EMAILS", {"admin@example.com", email})
+    asyncio.run(bootstrap_admins())  # existing ordinary account: warn, don't promote
+    me = client.get("/api/auth/me", headers=u["h"]).json()
+    assert me["is_admin"] is False
+    assert client.get("/api/admin/overview", headers=u["h"]).status_code == 403
+
+
+def test_cli_grants_and_removes_admin(client):
+    import asyncio
+    from app.admin_setup import _cli
+    u = make_user(client, "Promoted")
+    email = client.get("/api/auth/me", headers=u["h"]).json()["email"]
+    assert asyncio.run(_cli("make-admin", email)) == 0
+    assert client.get("/api/admin/overview", headers=u["h"]).status_code == 200
+    assert asyncio.run(_cli("remove-admin", email)) == 0
+    assert client.get("/api/admin/overview", headers=u["h"]).status_code == 403
+    assert asyncio.run(_cli("make-admin", "nobody@example.com")) == 1
+
+
+def test_login_response_carries_app_flags(client, admin):
+    d = client.post("/api/auth/login", json={"email": "admin@example.com", "password": "Adm1n-Test-Pass"}).json()["user"]
+    assert d["is_admin"] is True and "needs_terms" in d and "has_password" in d and "password_hash" not in d

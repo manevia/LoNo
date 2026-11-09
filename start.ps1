@@ -75,7 +75,8 @@ if (-not (Test-Path $envFile)) {
     "# mongomock:// = in-memory database that resets on restart. Use mongodb://localhost:27017 to keep data.",
     "MONGO_URL=mongomock://", "DB_NAME=lono", "JWT_SECRET=$(NewSecret)", "CORS_ORIGINS=*",
     "PUBLIC_ORIGIN=http://localhost:$Port", "STORAGE_BACKEND=local", "ANTHROPIC_API_KEY=",
-    "TRANSCRIBE_API_KEY=", "GOOGLE_CLIENT_ID=", "STRIPE_API_KEY="
+    "TRANSCRIBE_API_KEY=", "GOOGLE_CLIENT_ID=", "STRIPE_API_KEY=",
+    "ADMIN_EMAILS=msf@ciu.edu.lr", "SUPPORT_EMAIL=lono@ciu.edu.lr"
   ) | Set-Content $envFile
   Say "Created backend\.env (in-memory database)."
 }
