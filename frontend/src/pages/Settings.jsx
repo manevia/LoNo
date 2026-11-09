@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Smartphone, Tv, Gauge, CheckCircle2, Share } from "lucide-react";
+import { setPref, usePrefs } from "@/lib/device";
+import { useInstall } from "@/lib/install";
 import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -16,6 +18,8 @@ export default function Settings() {
   const [pw, setPw] = useState({ current_password: "", new_password: "" });
   const [del, setDel] = useState({ confirm_email: "", password: "" });
   const [busy, setBusy] = useState("");
+  const prefs = usePrefs();
+  const install = useInstall();
 
   if (!user) return null;
   const run = async (key, fn) => { setBusy(key); try { await fn(); } finally { setBusy(""); } };
@@ -66,6 +70,49 @@ export default function Settings() {
             <input data-testid="settings-name" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} className={`${field} mt-1.5`} /></label>
           <button disabled={busy === "name" || !name.trim() || name.trim() === user.name} className={primary}>Save</button>
         </form>
+      </section>
+
+      <section className="mt-10" aria-labelledby="s-devices" data-testid="settings-devices">
+        <h2 id="s-devices" className="font-display text-xl mb-3">Devices and display</h2>
+        <div className={`${card} divide-y divide-white/10`}>
+          <div className="pb-4 flex items-start gap-3">
+            <Smartphone className="w-5 h-5 text-gray-400 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-medium">Install the LoNo app</div>
+              {install.installed ? (
+                <p className="text-sm text-[#34C759] mt-1 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> You're using the installed app.</p>
+              ) : install.canPrompt ? (
+                <>
+                  <p className="text-sm text-gray-400 mt-1">Adds LoNo to your home screen or desktop. It opens full screen and loads faster.</p>
+                  <button data-testid="install-app" onClick={install.prompt} className={`${primary} mt-3 inline-flex items-center gap-2`}><Download className="w-4 h-4" /> Install app</button>
+                </>
+              ) : install.ios ? (
+                <p className="text-sm text-gray-400 mt-1">In Safari, tap <Share className="inline w-3.5 h-3.5 -mt-0.5" aria-label="Share" /> <strong className="text-white">Share</strong>, then <strong className="text-white">Add to Home Screen</strong>.</p>
+              ) : (
+                <p className="text-sm text-gray-400 mt-1">Open LoNo in Chrome, Edge or Samsung Internet on your phone or computer and use the browser's <strong className="text-white">Install</strong> option. Smart TV apps are listed in the project's device guide.</p>
+              )}
+            </div>
+          </div>
+          {[
+            ["tv", Tv, "TV mode", "Bigger text, and navigation with a TV remote's arrow, OK and Back buttons.", prefs.tv, prefs.tvAuto],
+            ["dataSaver", Gauge, "Data saver", "Smaller images, no preloading, and video starts at low quality. Good for mobile data.", prefs.dataSaver, prefs.dataSaverAuto],
+          ].map(([key, Icon, title, desc, on, auto]) => (
+            <div key={key} className="py-4 last:pb-0 flex items-start gap-3">
+              <Icon className="w-5 h-5 text-gray-400 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <label htmlFor={`pref-${key}`} className="font-medium">{title}</label>
+                <p className="text-sm text-gray-400 mt-1">{desc}</p>
+              </div>
+              <select id={`pref-${key}`} data-testid={`pref-${key}`} value={auto ? "auto" : on ? "on" : "off"}
+                onChange={(e) => setPref(key === "dataSaver" ? "saver" : "tv", e.target.value === "auto" ? null : e.target.value === "on")}
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm">
+                <option value="auto">Automatic ({on ? "on" : "off"})</option>
+                <option value="on">On</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="mt-10" aria-labelledby="s-password">

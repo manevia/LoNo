@@ -13,7 +13,7 @@ from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-VERSION = "2.5.0"
+VERSION = "2.6.0"
 
 
 @asynccontextmanager
@@ -63,6 +63,20 @@ async def public_config():
 app.include_router(api)
 
 
+@app.get("/.well-known/assetlinks.json", include_in_schema=False)
+async def assetlinks():
+    """Lets the LoNo Android app (phone / Android TV, built as a Trusted Web Activity)
+    open this site full screen without a browser bar."""
+    from fastapi.responses import JSONResponse
+    if not (config.ANDROID_APP_PACKAGE and config.ANDROID_CERT_SHA256):
+        return JSONResponse([], headers={"Cache-Control": "max-age=300"})
+    return JSONResponse([{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {"namespace": "android_app", "package_name": config.ANDROID_APP_PACKAGE,
+                   "sha256_cert_fingerprints": config.ANDROID_CERT_SHA256},
+    }], headers={"Cache-Control": "max-age=300"})
+
+
 @app.middleware("http")
 async def security_headers(request, call_next):
     resp = await call_next(request)
@@ -80,14 +94,18 @@ if config.FRONTEND_DIR:
     from fastapi.responses import FileResponse
     from fastapi.staticfiles import StaticFiles
 
+    import mimetypes
+    mimetypes.add_type("application/manifest+json", ".webmanifest")
     web = Path(config.FRONTEND_DIR).resolve()
     app.mount("/static", StaticFiles(directory=web / "static"), name="static")
 
-    @app.get("/{path:path}", include_in_schema=False)
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     async def spa(path: str):
         f = (web / path).resolve()
         if path and web in f.parents and f.is_file():
-            return FileResponse(f)
-        return FileResponse(web / "index.html")  # client-side routes
+            # The service worker must be re-checked on every visit so updates roll out.
+            no_cache = path in ("sw.js", "manifest.webmanifest", "index.html")
+            return FileResponse(f, headers={"Cache-Control": "no-cache"} if no_cache else None)
+        return FileResponse(web / "index.html", headers={"Cache-Control": "no-cache"})  # client-side routes
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=config.CORS_ORIGINS != ["*"],
                    allow_methods=["*"], allow_headers=["*"])

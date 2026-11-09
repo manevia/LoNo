@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, errorText } from "@/lib/api";
+import { api, errorText, resolveMedia } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import ContentCard from "@/components/ContentCard";
@@ -33,7 +33,7 @@ export default function Channel() {
   return (
     <div data-testid="channel-page">
       <div className="relative h-64 md:h-80 overflow-hidden">
-        <img loading="lazy" decoding="async" src={ch.banner_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img loading="lazy" decoding="async" src={resolveMedia(ch.banner_url)} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] to-transparent" />
       </div>
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 -mt-16 relative">

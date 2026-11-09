@@ -130,3 +130,21 @@ h1, h2, h3, h4, h5, h6, .font-display {
 }
 
 :focus-visible { outline: 2px solid #FFB000; outline-offset: 2px; }
+
+/* ---------- TV mode (html.tv): read from across the room, driven by a remote ---------- */
+html.tv { font-size: 112.5%; }
+html.tv #root { padding-left: 2.5vw; padding-right: 2.5vw; }      /* overscan safe area */
+html.tv :focus-visible,
+html.tv a:focus, html.tv button:focus {
+    outline: 4px solid #FFB000;
+    outline-offset: 4px;
+    border-radius: 12px;
+}
+html.tv a.group { transition: transform .15s ease; }
+html.tv a.group:focus { transform: scale(1.06); z-index: 5; }
+html.tv a.group:focus img { opacity: 1; }
+html.tv [data-testid="ai-chat-fab"] { display: none; }              /* typing isn't practical with a remote */
+html.tv ::-webkit-scrollbar { display: none; }
+
+/* ---------- Data saver (html.data-saver) ---------- */
+html.data-saver .data-heavy { display: none !important; }

@@ -72,6 +72,10 @@ ADMIN_PASSWORD = _env("ADMIN_PASSWORD")
 TERMS_VERSION = _env("TERMS_VERSION", "2026-11")  # bump when the terms change; new consent is recorded
 SUPPORT_EMAIL = _env("SUPPORT_EMAIL")              # shown on the Terms page for privacy requests
 
+# Android phone/TV app (Trusted Web Activity) verification: /.well-known/assetlinks.json
+ANDROID_APP_PACKAGE = _env("ANDROID_APP_PACKAGE")            # e.g. lr.edu.ciu.lono
+ANDROID_CERT_SHA256 = [f.strip() for f in _env("ANDROID_CERT_SHA256").split(",") if f.strip()]
+
 # Abuse protection
 LOGIN_MAX_FAILURES = int(_env("LOGIN_MAX_FAILURES", "5"))        # per email+IP
 LOGIN_WINDOW_SEC = int(_env("LOGIN_WINDOW_SEC", "900"))

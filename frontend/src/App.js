@@ -8,6 +8,7 @@ import AIChatFloat from "@/components/AIChatFloat";
 import Home from "@/pages/Home";
 import MobileNav from "@/components/MobileNav";
 import TermsBanner from "@/components/TermsBanner";
+import InstallBanner from "@/components/InstallBanner";
 
 // After a new deploy, an open tab may ask for page files that no longer exist.
 // Reload once to pick up the new version instead of showing a broken page.
@@ -64,6 +65,7 @@ const Shell = ({ children }) => (
     <TermsBanner />
     <main className="pb-16 lg:pb-0"><Suspense fallback={<PageLoading />}>{children}</Suspense></main>
     <AIChatFloat />
+    <InstallBanner />
     <MobileNav />
   </div>
 );

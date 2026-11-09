@@ -68,3 +68,12 @@ def test_security_headers(client):
     assert r.headers["x-frame-options"] == "DENY"
     assert r.headers["cache-control"] == "no-store"
     assert "strict-origin" in r.headers["referrer-policy"]
+
+
+def test_assetlinks(client, monkeypatch):
+    from app import config
+    assert client.get("/.well-known/assetlinks.json").json() == []
+    monkeypatch.setattr(config, "ANDROID_APP_PACKAGE", "lr.edu.ciu.lono")
+    monkeypatch.setattr(config, "ANDROID_CERT_SHA256", ["AA:BB"])
+    d = client.get("/.well-known/assetlinks.json").json()
+    assert d[0]["target"]["package_name"] == "lr.edu.ciu.lono" and d[0]["target"]["sha256_cert_fingerprints"] == ["AA:BB"]

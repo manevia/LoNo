@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, resolveMedia } from "@/lib/api";
 import { Link } from "react-router-dom";
 import { Loader2, Radio, Tv } from "lucide-react";
 
 const Card = ({ item }) => (
   <Link to={`/watch/${item.id}`} data-testid={`live-card-${item.id}`} className="group relative aspect-video rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition">
-    <img loading="lazy" decoding="async" src={item.thumbnail_url} alt={item.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+    <img loading="lazy" decoding="async" src={resolveMedia(item.thumbnail_url)} alt={item.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
     <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-[#FF3B30] px-2 py-1 rounded text-[10px] font-bold tracking-widest">
       <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE

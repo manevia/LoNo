@@ -1,4 +1,5 @@
 import axios from "axios";
+import { lightImage } from "@/lib/device";
 
 // Empty = same origin (nginx in Docker, or CRA's dev proxy to :8001).
 const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
@@ -24,5 +25,5 @@ export const errorText = (e, fallback = "Something went wrong. Try again.") => {
 export const resolveMedia = (url) => {
   if (!url) return url;
   if (url.startsWith("/api/")) return `${BACKEND_URL}${url}`;
-  return url;
+  return lightImage(url); // smaller images when data saver is on
 };
