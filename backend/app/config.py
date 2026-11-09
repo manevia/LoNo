@@ -88,7 +88,16 @@ INGEST_RTMPS_URL = _env("INGEST_RTMPS_URL", "")                                 
 INGEST_SRT_URL = _env("INGEST_SRT_URL", "srt://localhost:8890")
 MEDIA_INTERNAL_SECRET = _env("MEDIA_INTERNAL_SECRET") or ("internal-" + JWT_SECRET[:24])
 SECRET_ENC_KEY = _env("SECRET_ENC_KEY")                                          # encrypts stored stream keys
+def _sibling_tool(path: str, tool: str) -> str:
+    """ffprobe lives next to ffmpeg; replace only the file name (works for / and \\ paths)."""
+    cut = max(path.rfind("/"), path.rfind("\\"))
+    folder, name = path[:cut + 1], path[cut + 1:]
+    return folder + name.replace("ffmpeg", tool) if cut >= 0 else tool
+
+
 FFMPEG_BIN = _env("FFMPEG_BIN", "ffmpeg")
+# ffprobe sits next to ffmpeg in every build; derive it so a full FFMPEG_BIN path works without PATH.
+FFPROBE_BIN = _env("FFPROBE_BIN") or _sibling_tool(FFMPEG_BIN, "ffprobe")
 RECORDINGS_DIR = _env("RECORDINGS_DIR", str(BACKEND_DIR / "data" / "recordings"))
 
 # Creator API

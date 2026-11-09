@@ -4,7 +4,7 @@
     .\start.cmd -Docker    run the full stack with Docker on http://localhost:8080
     .\start.cmd -Port 9000 use another port
 #>
-param([switch]$Docker, [int]$Port = 8001, [switch]$NoBrowser)
+param([switch]$Docker, [int]$Port = 8001, [switch]$NoBrowser, [switch]$Broadcast)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Backend = Join-Path $Root "backend"
@@ -124,6 +124,80 @@ if ($stale) {
   }
 }
 
+# 4b. Live broadcasting (optional: .\start.cmd -Broadcast)
+#     Downloads the MediaMTX media server (checksum-verified) and makes sure ffmpeg is available.
+$mtxProc = $null
+if ($Broadcast) {
+  $MtxVersion = "v1.9.3"
+  # SHA-256 of each release file, pinned here (this MediaMTX release publishes no checksum file).
+  $MtxSha = @{
+    "mediamtx_v1.9.3_windows_amd64.zip"    = "af2ce0dce3201e10c39dae4e6d8e52c983d6940b1fa0fdd7f3d16c87ac764626"
+    "mediamtx_v1.9.3_linux_amd64.tar.gz"   = "0b885dbfa4ef9c14cd00191c57d90d804255ff50403a28b85ceee7988c535b60"
+    "mediamtx_v1.9.3_linux_arm64v8.tar.gz" = "f2f02109dd3d88773d7de5ae84385d41041bc9d60d0459eb6c61462cb2da0d1e"
+    "mediamtx_v1.9.3_darwin_amd64.tar.gz"  = "935ed174245004b425a93f6b7c1eac52310d833d4ebbca041d0f19195291eaf6"
+    "mediamtx_v1.9.3_darwin_arm64.tar.gz"  = "562b7f8fe24d9005510efe1d15589119a2bf4e77e6a4d3fe35b1d3f55c75263c"
+  }
+  $Tools = Join-Path $Root "tools"
+  $mtxDir = Join-Path $Tools "mediamtx"
+  $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -match "Arm64") { "arm64" } else { "amd64" }
+  if ($OnWindows) { $asset = "mediamtx_${MtxVersion}_windows_amd64.zip"; $mtxExe = Join-Path $mtxDir "mediamtx.exe" }
+  elseif ($IsMacOS) { $asset = "mediamtx_${MtxVersion}_darwin_$arch.tar.gz"; $mtxExe = Join-Path $mtxDir "mediamtx" }
+  else { $larch = if ($arch -eq "arm64") { "arm64v8" } else { "amd64" }; $asset = "mediamtx_${MtxVersion}_linux_$larch.tar.gz"; $mtxExe = Join-Path $mtxDir "mediamtx" }
+  if (-not (Test-Path $mtxExe)) {
+    Say "Downloading the MediaMTX media server $MtxVersion..."
+    New-Item -ItemType Directory -Force -Path $mtxDir | Out-Null
+    $base = "https://github.com/bluenviron/mediamtx/releases/download/$MtxVersion"
+    $file = Join-Path $mtxDir $asset
+    $ProgressPreference = "SilentlyContinue"
+    try { Invoke-WebRequest "$base/$asset" -OutFile $file -UseBasicParsing }
+    catch { Fail "Couldn't download MediaMTX. Check your internet connection." }
+    $expected = $MtxSha[$asset]
+    $actual = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+    if (-not $expected -or $expected -ne $actual) { Remove-Item $file -Force; Fail "The MediaMTX download didn't match LoNo's pinned checksum, so it was deleted. Try again, or report it." }
+    if ($asset.EndsWith(".zip")) { Expand-Archive $file -DestinationPath $mtxDir -Force } else { tar -xzf $file -C $mtxDir }
+    Remove-Item $file -Force
+  }
+
+  # ffmpeg: use one on PATH; on Windows install it with winget if needed.
+  $ffmpeg = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
+  if (-not $ffmpeg -and $OnWindows) {
+    $found = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $found -and (Have "winget")) {
+      Say "Installing ffmpeg with winget (Gyan.FFmpeg)..."
+      winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements | Out-Host
+      $found = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    if ($found) { $ffmpeg = $found.FullName }
+  }
+  if (-not $ffmpeg) { Fail "ffmpeg is needed for broadcasting. Install it (Windows: winget install Gyan.FFmpeg; macOS: brew install ffmpeg; Linux: sudo apt install ffmpeg) and run this again." }
+  Say "Using ffmpeg: $ffmpeg"
+
+  # This PC's address on the local network, so OBS or other computers here can send to it.
+  $lan = "127.0.0.1"
+  try {
+    if ($OnWindows) {
+      $lan = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | Where-Object { $_.IPAddress -notmatch "^(127\.|169\.254\.)" -and $_.PrefixOrigin -ne "WellKnown" } |
+              Sort-Object -Property InterfaceMetric | Select-Object -First 1).IPAddress
+    } else {
+      $lan = (hostname -I 2>$null).Split(" ")[0]
+    }
+  } catch { }
+  if (-not $lan) { $lan = "127.0.0.1" }
+
+  $env:MEDIA_ENABLED = "true"
+  $env:FFMPEG_BIN = $ffmpeg
+  $env:INGEST_RTMP_URL = "rtmp://${lan}:1935/live"
+  $env:INGEST_SRT_URL = "srt://${lan}:8890"
+  $env:MTX_AUTHHTTPADDRESS = "http://127.0.0.1:$Port/api/broadcast/mtx/auth"
+  $env:MTX_WEBRTCADDITIONALHOSTS = $lan
+  foreach ($p in 1935, 8889, 8888, 9997) { if (PortBusy $p) { Fail "Port $p is in use; broadcasting needs it. Close the program using it and try again." } }
+  Say "Starting the media server (allow it through the firewall on private networks if Windows asks)..."
+  $mtxProc = Start-Process -FilePath $mtxExe -ArgumentList @((Join-Path $Root "media/mediamtx.yml")) -WorkingDirectory $mtxDir -NoNewWindow -PassThru
+  Start-Sleep -Seconds 1
+  if ($mtxProc.HasExited) { Fail "The media server stopped during startup. Scroll up for its message." }
+  Say "Broadcasting on. Encoder server: rtmp://${lan}:1935/live (stream key in Creator Studio > Live Studio)"
+}
+
 # 5. Run
 if (PortBusy $Port) { Fail "Port $Port is already in use. Close the other program, or run: .\start.cmd -Port 8002" }
 $env:FRONTEND_DIR = (Join-Path $Frontend "build")
@@ -138,4 +212,7 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 Say "Ready: $url"
 if (-not $NoBrowser) { try { Start-Process $url } catch { } }
-try { $proc.WaitForExit() } finally { if (-not $proc.HasExited) { $proc.Kill() } }
+try { $proc.WaitForExit() } finally {
+  if (-not $proc.HasExited) { $proc.Kill() }
+  if ($mtxProc -and -not $mtxProc.HasExited) { $mtxProc.Kill() }
+}

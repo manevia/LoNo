@@ -13,7 +13,7 @@ Status: **phases 1 to 3 of 4 done** (broadcast core, Live Studio with Devices & 
 | 1 | Ingest (RTMP / RTMPS / SRT), rotatable stream key, private test sessions, go live on LoNo, simulcast with per-destination status and retry, encoder reconnect, recording with an explicit publish choice | **Done (API)** |
 | 2 | **Live Studio** (Creator Studio → Open Live Studio): Devices & Sources, external encoder settings, destinations, private test with preview, Go live, per-destination status and Retry, activity log, End, recordings | **Done** |
 | 3 | Creator API: scoped credentials, signed webhooks, docs and examples, test environment (see [CREATOR-API.md](CREATOR-API.md)) | **Done** |
-| 4 | End-to-end verification with real encoders (OBS Studio and others) and hardware | Planned |
+| 4 | End-to-end verification with real encoders (OBS Studio and others), hardware and platforms: checklist in [REAL-WORLD-TESTS.md](REAL-WORLD-TESTS.md) | Waiting for on-site testing |
 
 ## How it works
 
@@ -87,12 +87,23 @@ INGEST_SRT_URL=srt://live.your-domain:8890
 
 **RTMPS:** put `server.crt` and `server.key` (for example, from Let's Encrypt) in `media/certs/`, then set `rtmpEncryption: optional` in `media/mediamtx.yml`.
 
-**Local mode (launcher):** broadcasting is off by default. To try it:
+**Local mode (launcher):** add one option to turn broadcasting on:
 
-1. Install **ffmpeg**.
-2. Download **MediaMTX 1.9.x** for your system from github.com/bluenviron/mediamtx/releases.
-3. Run `mediamtx media/mediamtx.yml`.
-4. Set `MEDIA_ENABLED=true` in `backend/.env`.
+```
+start.cmd -Broadcast          (Windows)
+./start.sh --broadcast        (Linux / macOS)
+```
+
+The launcher then:
+
+1. Downloads **MediaMTX 1.9.3** into `tools/mediamtx/` the first time, and checks it against SHA-256 checksums pinned in the launcher (that release publishes none). A mismatch deletes the file and stops.
+2. Finds **ffmpeg**. On Windows it installs it with `winget install Gyan.FFmpeg` if it's missing. On macOS run `brew install ffmpeg`; on Debian/Ubuntu, `sudo apt install ffmpeg`.
+3. Finds this computer's **network address**, so OBS or other computers on the same network can send to it. Live Studio shows that address as the encoder server.
+4. Starts the media server with LoNo. **Ctrl+C stops both.**
+
+**Firewall:** Windows asks once about `mediamtx.exe`. Allow it on **private** networks. These ports are used: 1935 (RTMP), 8890/udp (SRT), 8889 and 8189/udp (browser cameras), and 8888 (HLS, local only).
+
+**Phones** need LoNo on an **https** address. Phone browsers only allow the camera on secure pages; `localhost` counts as secure, but a computer's network address doesn't. Laptops can join on `http://localhost` from the same computer, or through an https address.
 
 ## Settings for encoders
 

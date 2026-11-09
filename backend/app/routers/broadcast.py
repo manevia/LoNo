@@ -465,7 +465,7 @@ async def _finalize_recording(s: dict):
     if proc.returncode != 0 or not out.exists():
         await db.recordings.update_one({"id": rec["id"]}, {"$set": {"status": "failed", "error": "Couldn't assemble the recording"}})
         return
-    probe = await asyncio.create_subprocess_exec("ffprobe", "-v", "error", "-show_entries", "format=duration",
+    probe = await asyncio.create_subprocess_exec(config.FFPROBE_BIN, "-v", "error", "-show_entries", "format=duration",
                                                  "-of", "default=nw=1:nk=1", str(out), stdout=asyncio.subprocess.PIPE)
     dur = (await probe.communicate())[0].decode().strip()
     key = f"recordings/{s['owner_id']}/{s['id']}.mp4"
