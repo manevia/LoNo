@@ -171,7 +171,7 @@ export default function CourseEditor() {
               </div>
             </div>
           </div>
-          {draft.thumbnail_url && <img src={resolveMedia(draft.thumbnail_url)} alt="" className="w-48 aspect-[4/3] object-cover rounded-lg ring-1 ring-white/10" />}
+          {draft.thumbnail_url && <img loading="lazy" decoding="async" src={resolveMedia(draft.thumbnail_url)} alt="" className="w-48 aspect-[4/3] object-cover rounded-lg ring-1 ring-white/10" />}
         </div>
       </section>
 

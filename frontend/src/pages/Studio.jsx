@@ -180,7 +180,7 @@ export default function Studio() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {dash.videos.map((v) => (
               <div key={v.id} className="rounded-xl bg-[#121212] border border-white/10 overflow-hidden">
-                <img src={resolveMedia(v.thumbnail_url)} alt="" className="w-full aspect-video object-cover" />
+                <img loading="lazy" decoding="async" src={resolveMedia(v.thumbnail_url)} alt="" className="w-full aspect-video object-cover" />
                 <div className="p-4">
                   <div className="font-medium truncate">{v.title}</div>
                   <div className="mt-1 text-xs text-gray-400 flex justify-between">

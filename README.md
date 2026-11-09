@@ -11,7 +11,7 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 
 - **Backend:** FastAPI + MongoDB (Motor), in `backend/`
 - **Frontend:** React 19 + Tailwind + shadcn/ui, in `frontend/`
-- **Version:** 2.3 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights and sign-in protection)
+- **Version:** 2.4 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection and account controls)
 
 ## Run it
 
@@ -123,7 +123,7 @@ Rules that keep the economy fair:
 cd backend && pytest
 ```
 
-37 API tests cover:
+43 API tests cover:
 
 - accounts
 - likes, My List and subscriptions
@@ -137,6 +137,8 @@ cd backend && pytest
 - course reviews: who can review, averages, editing and deleting
 - sign-in and sign-up rate limits
 - wallet earnings insights, watch history and resume position
+- account settings: profile, password, data export and account deletion
+- security headers
 
 ## Project layout
 
@@ -168,6 +170,21 @@ start.sh                 macOS/Linux launcher
 | New accounts from one network | 10 per hour | `SIGNUPS_PER_IP_PER_HOUR` |
 
 Limits are kept in the API process's memory, which suits the default single-process setup. If you run several API copies behind a load balancer, move them to Redis so the copies share counts.
+
+## Privacy and account controls
+
+Signed-in users manage their account at **Profile → Settings**:
+
+- **Change** their display name, or change their password. Google sign-ups can set a password here.
+- **Download their data:** everything LoNo stores about them, as one JSON file (`GET /api/me/export`). This covers the GDPR right of access.
+- **Delete their account** after typing their email and password (`DELETE /api/me`). This covers the right to erasure. Deletion removes:
+  - their profile, wallet history, stakes and watch history
+  - their certificates, reviews and AI chats
+  - their channel, uploads (including the stored files) and courses
+
+Vote totals, view counts and subscriber numbers they contributed to stay, with no link to them. Learners who passed their courses keep their certificates.
+
+Every response also carries security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`). API responses are marked `Cache-Control: no-store` so shared devices and proxies don't keep personal data.
 
 ## Before going live
 

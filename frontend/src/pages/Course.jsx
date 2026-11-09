@@ -178,7 +178,7 @@ export default function Course() {
                   className="w-full aspect-video rounded-2xl bg-black ring-1 ring-white/10" />
               ) : (
                 <div className="relative aspect-video rounded-2xl overflow-hidden ring-1 ring-white/10">
-                  <img src={resolveMedia(course.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
+                  <img loading="lazy" decoding="async" src={resolveMedia(course.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
                   <div className="absolute inset-0 grid place-items-center text-center p-6">
                     <div><Lock className="w-6 h-6 mx-auto text-gray-300" /><p className="mt-2 text-gray-300">Start the course to watch lessons</p></div>
                   </div>

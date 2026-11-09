@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Award, LogOut } from "lucide-react";
+import { Award, LogOut, Settings as SettingsIcon } from "lucide-react";
 import { api, resolveMedia } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import ContentCard from "@/components/ContentCard";
@@ -29,7 +29,7 @@ export default function Profile() {
   return (
     <div data-testid="profile-page" className="max-w-5xl mx-auto px-4 md:px-8 pt-12 pb-32">
       <div className="flex items-center gap-6">
-        <img src={user.avatar_url} alt="" className="w-20 h-20 md:w-24 md:h-24 rounded-2xl ring-2 ring-white/10 bg-white/5" />
+        <img loading="lazy" decoding="async" src={user.avatar_url} alt="" className="w-20 h-20 md:w-24 md:h-24 rounded-2xl ring-2 ring-white/10 bg-white/5" />
         <div className="min-w-0">
           <h1 className="font-display text-3xl md:text-4xl tracking-tight truncate">{user.name}</h1>
           <div className="text-sm text-gray-400 truncate">{user.email}</div>
@@ -81,7 +81,7 @@ export default function Profile() {
               <li key={h.content.id}>
                 <Link to={`/watch/${h.content.id}`} className="grid grid-cols-[112px_1fr_auto] gap-4 items-center py-3 hover:bg-white/[0.02]">
                   <div className="relative">
-                    <img src={resolveMedia(h.content.thumbnail_url)} alt="" className="w-full aspect-video object-cover rounded-md ring-1 ring-white/10" />
+                    <img loading="lazy" decoding="async" src={resolveMedia(h.content.thumbnail_url)} alt="" className="w-full aspect-video object-cover rounded-md ring-1 ring-white/10" />
                     {h.percent != null && (
                       <div className="absolute inset-x-1 bottom-1 h-1 rounded-full bg-black/60 overflow-hidden" aria-hidden="true">
                         <div className="h-full bg-[#FF3B30]" style={{ width: `${Math.max(3, h.percent)}%` }} />
@@ -112,9 +112,14 @@ export default function Profile() {
         ) : <p className="mt-3 text-gray-400">Use “My list” on any title to save it here.</p>}
       </section>
 
-      <button data-testid="profile-logout" onClick={() => { logout(); nav("/"); }} className="mt-12 inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5 hover:bg-white/10">
+      <div className="mt-12 flex flex-wrap gap-3">
+      <Link to="/settings" data-testid="profile-settings" className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5 hover:bg-white/10">
+        <SettingsIcon className="w-4 h-4" /> Settings
+      </Link>
+      <button data-testid="profile-logout" onClick={() => { logout(); nav("/"); }} className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5 hover:bg-white/10">
         <LogOut className="w-4 h-4" /> Sign out
       </button>
+      </div>
     </div>
   );
 }

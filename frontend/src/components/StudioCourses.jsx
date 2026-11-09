@@ -49,7 +49,7 @@ export default function StudioCourses() {
           {items.map((c) => (
             <li key={c.id}>
               <Link to={`/studio/courses/${c.id}`} className="grid grid-cols-[72px_1fr_auto] gap-4 items-center py-4 hover:bg-white/[0.02]">
-                <img src={resolveMedia(c.thumbnail_url)} alt="" className="w-full aspect-[4/3] object-cover rounded-md ring-1 ring-white/10" />
+                <img loading="lazy" decoding="async" src={resolveMedia(c.thumbnail_url)} alt="" className="w-full aspect-[4/3] object-cover rounded-md ring-1 ring-white/10" />
                 <div className="min-w-0">
                   <div className="font-medium truncate">{c.title}</div>
                   <div className="text-xs text-gray-400 mt-1">

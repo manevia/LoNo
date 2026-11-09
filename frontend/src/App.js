@@ -1,27 +1,52 @@
 import "@/App.css";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import AIChatFloat from "@/components/AIChatFloat";
 import Home from "@/pages/Home";
-import Watch from "@/pages/Watch";
-import Live from "@/pages/Live";
-import Browse from "@/pages/Browse";
-import Search from "@/pages/Search";
-import Channel from "@/pages/Channel";
-import Studio from "@/pages/Studio";
-import Wallet from "@/pages/Wallet";
-import Tokenomics from "@/pages/Tokenomics";
-import Governance from "@/pages/Governance";
-import Login from "@/pages/Login";
-import Signup from "@/pages/Signup";
-import Profile from "@/pages/Profile";
-import Learn from "@/pages/Learn";
-import Course from "@/pages/Course";
-import Certificate from "@/pages/Certificate";
-import CourseEditor from "@/pages/CourseEditor";
 import MobileNav from "@/components/MobileNav";
+
+// After a new deploy, an open tab may ask for page files that no longer exist.
+// Reload once to pick up the new version instead of showing a broken page.
+const page = (load) => lazy(() => load().then((mod) => {
+  sessionStorage.removeItem("lono_reloaded");
+  return mod;
+}).catch((err) => {
+  if (!sessionStorage.getItem("lono_reloaded")) {
+    sessionStorage.setItem("lono_reloaded", "1");
+    window.location.reload();
+    return new Promise(() => {});
+  }
+  throw err;
+}));
+
+// Home loads with the app; every other page downloads the first time it's opened,
+// which keeps the first load small on mobile data.
+const Watch = page(() => import("@/pages/Watch"));
+const Live = page(() => import("@/pages/Live"));
+const Browse = page(() => import("@/pages/Browse"));
+const Search = page(() => import("@/pages/Search"));
+const Channel = page(() => import("@/pages/Channel"));
+const Studio = page(() => import("@/pages/Studio"));
+const Wallet = page(() => import("@/pages/Wallet"));
+const Tokenomics = page(() => import("@/pages/Tokenomics"));
+const Governance = page(() => import("@/pages/Governance"));
+const Login = page(() => import("@/pages/Login"));
+const Signup = page(() => import("@/pages/Signup"));
+const Profile = page(() => import("@/pages/Profile"));
+const Learn = page(() => import("@/pages/Learn"));
+const Course = page(() => import("@/pages/Course"));
+const Certificate = page(() => import("@/pages/Certificate"));
+const CourseEditor = page(() => import("@/pages/CourseEditor"));
+const Settings = page(() => import("@/pages/Settings"));
+
+const PageLoading = () => (
+  <div className="min-h-[60vh] grid place-items-center" role="status" aria-label="Loading">
+    <div className="w-8 h-8 rounded-full border-2 border-white/15 border-t-[#FF3B30] animate-spin" />
+  </div>
+);
 
 const Protected = ({ children }) => {
   const { user, loading } = useAuth();
@@ -33,7 +58,7 @@ const Protected = ({ children }) => {
 const Shell = ({ children }) => (
   <div className="min-h-screen bg-[#050505] text-white">
     <Navbar />
-    <main className="pb-16 lg:pb-0">{children}</main>
+    <main className="pb-16 lg:pb-0"><Suspense fallback={<PageLoading />}>{children}</Suspense></main>
     <AIChatFloat />
     <MobileNav />
   </div>
@@ -44,6 +69,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Toaster theme="dark" position="top-right" richColors />
+        <Suspense fallback={<div className="min-h-screen bg-[#050505]"><PageLoading /></div>}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
@@ -57,6 +83,7 @@ export default function App() {
           <Route path="/studio" element={<Protected><Shell><Studio /></Shell></Protected>} />
           <Route path="/wallet" element={<Protected><Shell><Wallet /></Shell></Protected>} />
           <Route path="/studio/courses/:id" element={<Protected><Shell><CourseEditor /></Shell></Protected>} />
+          <Route path="/settings" element={<Protected><Shell><Settings /></Shell></Protected>} />
           <Route path="/learn" element={<Shell><Learn /></Shell>} />
           <Route path="/learn/:id" element={<Shell><Course /></Shell>} />
           <Route path="/certificates/:id" element={<Shell><Certificate /></Shell>} />
@@ -64,6 +91,7 @@ export default function App() {
           <Route path="/governance" element={<Shell><Governance /></Shell>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

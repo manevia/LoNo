@@ -33,12 +33,12 @@ export default function Channel() {
   return (
     <div data-testid="channel-page">
       <div className="relative h-64 md:h-80 overflow-hidden">
-        <img src={ch.banner_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img loading="lazy" decoding="async" src={ch.banner_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] to-transparent" />
       </div>
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 -mt-16 relative">
         <div className="flex items-end gap-6">
-          <img src={ch.avatar_url} alt="" className="w-24 h-24 md:w-32 md:h-32 rounded-2xl ring-4 ring-[#050505] bg-white/10" />
+          <img loading="lazy" decoding="async" src={ch.avatar_url} alt="" className="w-24 h-24 md:w-32 md:h-32 rounded-2xl ring-4 ring-[#050505] bg-white/10" />
           <div className="pb-4">
             <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight">{ch.name}</h1>
             <div className="text-sm text-gray-400 flex items-center gap-3">

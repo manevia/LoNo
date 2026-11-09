@@ -99,7 +99,7 @@ export default function CourseReviews({ courseId, passed, onChange }) {
                 return (
                   <li key={r.id} className="py-5 first:pt-0">
                     <div className="flex items-center gap-3">
-                      <img src={r.avatar_url} alt="" className="w-9 h-9 rounded-full bg-white/10" />
+                      <img loading="lazy" decoding="async" src={r.avatar_url} alt="" className="w-9 h-9 rounded-full bg-white/10" />
                       <div className="min-w-0">
                         <div className="text-sm font-medium truncate">{r.user_name}{isMine && <span className="text-gray-500 font-normal"> (you)</span>}</div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">

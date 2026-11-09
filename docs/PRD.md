@@ -64,8 +64,13 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Wallet "Your earnings": 7/30/90-day stacked chart by source (watching, courses, staking, creator payouts, bonuses), verified watch time, viewing streak
 - Profile "Recently watched" with progress and clear-history; players resume where you left off
 
+## v2.4 (Nov 2026)
+- Settings: display name, change/set password, download my data (GDPR access), delete account (GDPR erasure, aggregates kept anonymously)
+- Security headers on every response; API responses not cached
+- Faster first load: pages download on demand (main bundle about 155 kB gzipped, down from about 300 kB), lazy images, safe reload after deploys
+
 ## Backlog (post-MVP priorities)
-- **P1**: On-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
+- **P1**: Compliance dashboard (KYC/AML provider integration, consent records, data-request log); on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction
 - **P2**: Real blockchain settlement layer, WalletConnect / MetaMask integration
 - **P2**: Marketplace (NFT, merch, tickets, licenses), programmatic ads platform, developer portal + SDK

@@ -117,7 +117,7 @@ export default function Watch() {
         <div className="lg:col-span-8">
           {isAudio ? (
             <div className="relative rounded-2xl overflow-hidden bg-[#121212] ring-1 ring-white/10 aspect-video">
-              <img src={resolveMedia(item.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
+              <img loading="lazy" decoding="async" src={resolveMedia(item.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
               <div className="absolute inset-0 grid place-items-center p-6">
                 <audio data-testid="audio-player" controls src={resolveMedia(item.stream_url)} className="w-full max-w-lg" onLoadedMetadata={onLoadedMetadata} {...watch.mediaProps} />
               </div>
@@ -175,7 +175,7 @@ export default function Watch() {
 
           {item.channel && (
             <Link to={`/channel/${item.channel.id}`} data-testid="channel-link" className="mt-6 flex items-center gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition max-w-md">
-              <img src={item.channel.avatar_url} alt="" className="w-12 h-12 rounded-full bg-white/10" />
+              <img loading="lazy" decoding="async" src={item.channel.avatar_url} alt="" className="w-12 h-12 rounded-full bg-white/10" />
               <div>
                 <div className="font-medium">{item.channel.name}</div>
                 <div className="text-xs text-gray-400">{counts.subscribers.toLocaleString()} subscribers</div>

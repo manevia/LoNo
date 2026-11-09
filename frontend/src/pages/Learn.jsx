@@ -50,7 +50,7 @@ export default function Learn() {
           {courses.map((c) => (
             <Link key={c.id} to={`/learn/${c.id}`} data-testid={`course-${c.id}`}
               className="group grid grid-cols-[96px_1fr] md:grid-cols-[180px_1fr_auto] gap-5 py-6 items-center">
-              <img src={resolveMedia(c.thumbnail_url)} alt="" className="w-full aspect-[4/3] object-cover rounded-lg ring-1 ring-white/10" />
+              <img loading="lazy" decoding="async" src={resolveMedia(c.thumbnail_url)} alt="" className="w-full aspect-[4/3] object-cover rounded-lg ring-1 ring-white/10" />
               <div className="min-w-0">
                 <div className="text-xs text-gray-400">{c.level} / {c.lessons.length} lessons / {Math.round(c.lessons.reduce((n, l) => n + l.duration_sec, 0) / 60)} min</div>
                 <h3 className="mt-1 font-display text-2xl tracking-tight group-hover:text-[#FFB000] transition-colors">{c.title}</h3>

@@ -84,7 +84,7 @@ export default function Navbar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button data-testid="nav-avatar-btn" className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1.5 hover:bg-white/5">
-                <img src={user.avatar_url} alt="" className="w-8 h-8 rounded-full ring-2 ring-white/10" />
+                <img loading="lazy" decoding="async" src={user.avatar_url} alt="" className="w-8 h-8 rounded-full ring-2 ring-white/10" />
                 <span className="hidden md:block text-sm font-medium max-w-[100px] truncate">{user.name}</span>
               </button>
             </DropdownMenuTrigger>
