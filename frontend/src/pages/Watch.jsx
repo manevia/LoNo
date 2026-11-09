@@ -7,6 +7,7 @@ import useWatchSession from "@/lib/useWatchSession";
 import { Loader2, Share2, Plus, Check, ThumbsUp, Sparkles, Coins, Captions, GraduationCap, Star } from "lucide-react";
 import { toast } from "sonner";
 import ContentCard from "@/components/ContentCard";
+import MediaPlayer from "@/components/MediaPlayer";
 
 const pill = "flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 text-sm disabled:opacity-50 transition";
 
@@ -119,15 +120,17 @@ export default function Watch() {
             <div className="relative rounded-2xl overflow-hidden bg-[#121212] ring-1 ring-white/10 aspect-video">
               <img loading="lazy" decoding="async" src={resolveMedia(item.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
               <div className="absolute inset-0 grid place-items-center p-6">
-                <audio data-testid="audio-player" controls src={resolveMedia(item.stream_url)} className="w-full max-w-lg" onLoadedMetadata={onLoadedMetadata} {...watch.mediaProps} />
+                <div className="w-full max-w-lg">
+                  <MediaPlayer audio testId="audio-player" src={resolveMedia(item.stream_url)} live={isLive}
+                    title={item.title} artist={item.channel?.name} artwork={resolveMedia(item.thumbnail_url)}
+                    mediaProps={watch.mediaProps} onLoadedMetadata={onLoadedMetadata} />
+                </div>
               </div>
             </div>
           ) : (
-            <video data-testid="video-player" key={item.id} src={resolveMedia(item.stream_url)} poster={resolveMedia(item.thumbnail_url)}
-              controls playsInline crossOrigin="anonymous" onLoadedMetadata={onLoadedMetadata} {...watch.mediaProps}
-              className="w-full aspect-video rounded-2xl bg-black ring-1 ring-white/10 shadow-2xl">
-              {subtitleUrl && <track key={subtitleUrl} kind="subtitles" label="English" srcLang="en" src={subtitleUrl} default />}
-            </video>
+            <MediaPlayer key={item.id} testId="video-player" src={resolveMedia(item.stream_url)} poster={resolveMedia(item.thumbnail_url)}
+              live={isLive} title={item.title} artist={item.channel?.name} artwork={resolveMedia(item.thumbnail_url)}
+              subtitleUrl={subtitleUrl} mediaProps={watch.mediaProps} onLoadedMetadata={onLoadedMetadata} />
           )}
 
           <div className="mt-6 flex items-start justify-between gap-4 flex-wrap">
