@@ -26,15 +26,55 @@ fi
 set -a; . "$DEPLOY/.env"; set +a
 [[ -n "${PUBLIC_HOST:-}" && -n "${JWT_SECRET:-}" ]] || fail "deploy/.env needs PUBLIC_HOST and JWT_SECRET."
 
-# 2. DNS must point here, or Let's Encrypt can't issue the certificate
+# 2. DNS and Cloudflare
+LIVE_HOST="${LIVE_HOST:-$PUBLIC_HOST}"
 PUBLIC_IP="$(curl -fsS -4 --max-time 8 https://api.ipify.org || true)"
-DNS_IP="$(getent ahostsv4 "$PUBLIC_HOST" | awk 'NR==1{print $1}' || true)"
-if [[ -z "$DNS_IP" ]]; then
-  fail "$PUBLIC_HOST doesn't resolve yet. Ask the ciu.edu.lr DNS administrator for an A record: $PUBLIC_HOST -> ${PUBLIC_IP:-the public IP of this server}"
-elif [[ -n "$PUBLIC_IP" && "$DNS_IP" != "$PUBLIC_IP" ]]; then
-  say "WARNING: $PUBLIC_HOST points to $DNS_IP but this server's public IP is $PUBLIC_IP."
-  say "That's fine behind a NAT/firewall that forwards ports 80/443 here; otherwise fix the A record first."
+resolve() { getent ahostsv4 "$1" | awk 'NR==1{print $1}' || true; }
+CF_V4="$(curl -fsS --max-time 10 https://www.cloudflare.com/ips-v4 || true)"
+CF_V6="$(curl -fsS --max-time 10 https://www.cloudflare.com/ips-v6 || true)"
+is_cloudflare() {   # is this IPv4 address one of Cloudflare's?
+  [[ -n "$CF_V4" ]] && python3 -c "import ipaddress,sys; ip=ipaddress.ip_address(sys.argv[1]); sys.exit(0 if any(ip in ipaddress.ip_network(n.strip()) for n in sys.argv[2].split() if n.strip()) else 1)" "$1" "$CF_V4"
+}
+PUB_DNS="$(resolve "$PUBLIC_HOST")"
+[[ -n "$PUB_DNS" ]] || fail "$PUBLIC_HOST doesn't resolve yet. In Cloudflare DNS for the domain, add: A  $PUBLIC_HOST -> ${PUBLIC_IP:-the public IP of this server}  (Proxy status: DNS only, to start)"
+
+if [[ "${CLOUDFLARE_PROXY:-false}" == "true" ]]; then
+  [[ "$LIVE_HOST" != "$PUBLIC_HOST" ]] || fail "Behind the Cloudflare proxy, live ingest needs its own DNS-only name. Set LIVE_HOST (e.g. live.$PUBLIC_HOST) in deploy/.env and add: A  live.$PUBLIC_HOST -> ${PUBLIC_IP:-this server} (DNS only)."
+  [[ -n "$CF_V4" ]] || fail "Couldn't download Cloudflare's address list (https://www.cloudflare.com/ips-v4). Check internet access and try again."
+  is_cloudflare "$PUB_DNS" || say "WARNING: $PUBLIC_HOST resolves to $PUB_DNS, not Cloudflare. Turn the record to Proxied (orange cloud), or set CLOUDFLARE_PROXY=false."
+  LIVE_DNS="$(resolve "$LIVE_HOST")"
+  [[ -n "$LIVE_DNS" ]] || fail "$LIVE_HOST doesn't resolve. In Cloudflare DNS add: A  $LIVE_HOST -> ${PUBLIC_IP:-this server}  (Proxy status: DNS only)."
+  ! is_cloudflare "$LIVE_DNS" || fail "$LIVE_HOST is proxied by Cloudflare. Set its record to DNS only (grey cloud): encoders and browser cameras can't connect through the proxy."
+  { echo "# Written by setup.sh from https://www.cloudflare.com/ips-v4 and ips-v6 ($(date -u +%F))"
+    echo "servers {"
+    echo "	trusted_proxies static $(echo $CF_V4 $CF_V6)"
+    echo "	client_ip_headers CF-Connecting-IP"
+    echo "}"; } > "$DEPLOY/caddy.d/cloudflare.caddy"
+  cat > "$DEPLOY/sites.d/live.caddy" <<SITE
+# Live ingest name (DNS only). Also serves the app unproxied, so staff can upload files larger
+# than Cloudflare's 100 MB limit at https://$LIVE_HOST.
+$LIVE_HOST {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy web:80 {
+		header_up X-Forwarded-For {client_ip}
+		flush_interval -1
+	}
+}
+SITE
+  say "Cloudflare proxy mode: set SSL/TLS encryption to 'Full (strict)' for the domain in the Cloudflare dashboard."
+else
+  rm -f "$DEPLOY/caddy.d/cloudflare.caddy" "$DEPLOY/sites.d/live.caddy"
+  if is_cloudflare "$PUB_DNS"; then
+    fail "$PUBLIC_HOST is Proxied by Cloudflare (orange cloud) but CLOUDFLARE_PROXY=false. Either set the record to DNS only, or set CLOUDFLARE_PROXY=true and LIVE_HOST in deploy/.env."
+  elif [[ -n "$PUBLIC_IP" && "$PUB_DNS" != "$PUBLIC_IP" ]]; then
+    say "WARNING: $PUBLIC_HOST points to $PUB_DNS but this server's public IP is $PUBLIC_IP."
+    say "That's fine behind a NAT/firewall that forwards ports 80/443 here; otherwise fix the A record first."
+  fi
 fi
+# What creators paste into encoders always uses the live name
+sed -i "s|^INGEST_RTMP_URL=.*|INGEST_RTMP_URL=rtmp://$LIVE_HOST:1935/live|; s|^INGEST_SRT_URL=.*|INGEST_SRT_URL=srt://$LIVE_HOST:8890|" "$DEPLOY/.env"
+if grep -q "^RTMPS=optional" "$DEPLOY/.env"; then sed -i "s|^INGEST_RTMPS_URL=.*|INGEST_RTMPS_URL=rtmps://$LIVE_HOST:1936/live|" "$DEPLOY/.env"; fi
 
 # 3. Docker
 if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
@@ -59,11 +99,11 @@ done
 [[ "${OK:-}" == 1 ]] || fail "LoNo didn't answer on https://$PUBLIC_HOST yet. Check: docker compose -f deploy/docker-compose.yml logs caddy backend"
 
 # 6. RTMPS for encoders, once the certificate exists
-CERT="/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$PUBLIC_HOST/$PUBLIC_HOST.crt"
+CERT="/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$LIVE_HOST/$LIVE_HOST.crt"
 if [[ "${RTMPS:-no}" == "no" ]] && "${COMPOSE[@]}" exec -T media ls "$CERT" >/dev/null 2>&1; then
-  sed -i "s|^RTMPS=.*|RTMPS=optional|; s|^INGEST_RTMPS_URL=.*|INGEST_RTMPS_URL=rtmps://$PUBLIC_HOST:1936/live|" "$DEPLOY/.env"
+  sed -i "s|^RTMPS=.*|RTMPS=optional|; s|^INGEST_RTMPS_URL=.*|INGEST_RTMPS_URL=rtmps://$LIVE_HOST:1936/live|" "$DEPLOY/.env"
   "${COMPOSE[@]}" up -d media backend
-  say "RTMPS enabled for encoders: rtmps://$PUBLIC_HOST:1936/live"
+  say "RTMPS enabled for encoders: rtmps://$LIVE_HOST:1936/live"
 fi
 
 # 7. Backups and certificate refresh

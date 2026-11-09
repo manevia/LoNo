@@ -7,7 +7,8 @@ DEPLOY="${LONO_DEPLOY:-$(cd "$(dirname "$0")" && pwd)}"
 set -a; . "$DEPLOY/.env"; set +a
 [[ "${RTMPS:-no}" != "no" ]] || exit 0
 COMPOSE=(docker compose -f "$DEPLOY/docker-compose.yml" --env-file "$DEPLOY/.env")
-CERT="/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$PUBLIC_HOST/$PUBLIC_HOST.crt"
+H="${LIVE_HOST:-$PUBLIC_HOST}"
+CERT="/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$H/$H.crt"
 NOW="$("${COMPOSE[@]}" exec -T media sha256sum "$CERT" 2>/dev/null | cut -d' ' -f1 || true)"
 STATE=/var/lib/lono-rtmps.sha; mkdir -p /var/lib
 if [[ -n "$NOW" && "$NOW" != "$(cat "$STATE" 2>/dev/null || true)" ]]; then

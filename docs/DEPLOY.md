@@ -24,10 +24,30 @@ Setup is one command once the server and DNS are ready.
 
 If the campus uplink can't sustain that, use a cloud server (any provider with Ubuntu VMs) and keep the `lono.ciu.edu.lr` name pointing to it. A CDN can be added later for larger audiences.
 
-**DNS:** an **A record** for `lono.ciu.edu.lr` pointing at the server's public IP. The `ciu.edu.lr` zone is managed by CIU's IT team. Send them:
+**DNS (Cloudflare).** `ciu.edu.lr` is managed in Cloudflare, so you add the record yourself: **Cloudflare dashboard → ciu.edu.lr → DNS → Records → Add record**.
 
-> Please create an A record: `lono.ciu.edu.lr` → `<server public IP>` (TTL 300). It's for the LoNo platform; HTTPS certificates will be issued automatically by Let's Encrypt.
-> If the domain uses CAA records, please allow `letsencrypt.org`.
+**Option A: DNS only (recommended for the pilot).** One record:
+
+| Type | Name | Content | Proxy status |
+|---|---|---|---|
+| A | `lono` | the server's public IP | **DNS only** (grey cloud) |
+
+Everything works as built: the server gets its own Let's Encrypt certificate, uploads up to 4 GB work, and encoders and browser cameras connect to the same name. Keep `CLOUDFLARE_PROXY=false` in `deploy/.env`.
+
+**Option B: Proxied (Cloudflare caching and DDoS protection for the website).** Two records:
+
+| Type | Name | Content | Proxy status |
+|---|---|---|---|
+| A | `lono` | the server's public IP | **Proxied** (orange cloud) |
+| A | `live.lono` | the server's public IP | **DNS only** (grey cloud) |
+
+Then, in `deploy/.env`, set `CLOUDFLARE_PROXY=true` and `LIVE_HOST=live.lono.ciu.edu.lr`. Under **SSL/TLS → Overview**, set encryption to **Full (strict)**.
+
+What changes in proxied mode:
+- **Visitor addresses:** `setup.sh` downloads Cloudflare's current address ranges. Caddy then trusts the visitor address in `CF-Connecting-IP` **only** from those ranges, so per-address limits keep working and can't be spoofed.
+- **Live ingest** (RTMP, RTMPS, SRT and browser cameras) uses `live.lono.ciu.edu.lr`, because Cloudflare's proxy only carries web traffic. Live Studio shows that address to creators automatically.
+- **Uploads through Cloudflare's proxy are limited to 100 MB** on Free and Pro plans. Upload large files such as match replays at **https://live.lono.ciu.edu.lr**, which serves the same app without the proxy.
+- **Cloudflare's CDN terms** restrict serving video that isn't stored on Cloudflare (Stream, Images or R2). In proxied mode, replays and on-demand videos would pass through Cloudflare's CDN from your server. **Start with Option A**, and switch to Option B once videos are stored in Cloudflare R2.
 
 **Open ports.** In the cloud, set these in the provider's firewall or security group. On campus behind NAT, forward them to the server.
 
@@ -38,7 +58,7 @@ If the campus uplink can't sustain that, use a cloud server (any provider with U
 | 8890/udp | SRT from encoders |
 | 8189/udp | Browser cameras and field reporters (WebRTC) |
 
-Keep everything else closed. MongoDB, the API and the media server's control ports are never published.
+Keep everything else closed. MongoDB, the API and the media server's control ports are never published. In proxied mode, ports 80 and 443 can additionally be limited to Cloudflare's address ranges, except for the live name, which needs them for its own certificate and uploads.
 
 ## 2. Install
 
@@ -54,7 +74,7 @@ sudo ./deploy/setup.sh          # second run: installs Docker if needed, builds,
 ```
 
 The second run:
-1. Checks that `lono.ciu.edu.lr` points at the server, and **stops with the exact DNS request** if it doesn't.
+1. Checks the DNS, and **stops with the exact record to add in Cloudflare** if something's missing. It also catches a record whose proxy status (orange or grey) doesn't match `CLOUDFLARE_PROXY`.
 2. Opens the firewall ports if `ufw` is active.
 3. Builds and starts everything, then waits until `https://lono.ciu.edu.lr` answers.
 4. Turns on RTMPS for encoders once the certificate exists.
@@ -122,6 +142,10 @@ Checks that passed:
 - **What the API sees:** **`https` as the scheme**, and a client's **forged `X-Forwarded-For` and `X-Forwarded-Proto` discarded** by Caddy. The API uses the first forwarded address, which Caddy writes from the real connection.
 - **Large uploads:** **a 600 MB upload streamed through all three layers in 5 s, with the API's memory flat** (81 → 84 MB), and range requests for seeking worked.
 - The deployment scripts pass `bash -n` and ShellCheck.
+
+- **Cloudflare proxy mode, through the same chain:**
+  - a request from a trusted Cloudflare address carrying `CF-Connecting-IP: 9.9.9.9` and a forged `X-Forwarded-For` → the API saw **9.9.9.9**
+  - the same headers from an untrusted address, or with proxy mode off → **both ignored**
 
 **Not tested:**
 - **On real infrastructure:** Docker Compose itself (not available in the sandbox), real Let's Encrypt issuance, the DNS check, the firewall rules, and the backup and RTMPS-refresh jobs.

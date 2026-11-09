@@ -14,9 +14,12 @@ services:
       - "443:443/udp"          # HTTP/3
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST}
+      LIVE_HOST: ${LIVE_HOST:-${PUBLIC_HOST}}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy.d:/etc/caddy/caddy.d:ro      # optional: Cloudflare proxy trust (setup.sh)
+      - ./sites.d:/etc/caddy/sites.d:ro      # optional: live ingest name (setup.sh)
       - caddy-data:/data
       - caddy-config:/config
     depends_on: [web]
@@ -72,10 +75,10 @@ services:
       MTX_APIADDRESS: ":9997"
       MTX_HLSADDRESS: ":8888"
       MTX_RTSPADDRESS: ":8554"
-      MTX_WEBRTCADDITIONALHOSTS: ${PUBLIC_HOST}
+      MTX_WEBRTCADDITIONALHOSTS: ${LIVE_HOST:-${PUBLIC_HOST}}
       MTX_RTMPENCRYPTION: ${RTMPS:-no}
-      MTX_RTMPSERVERCERT: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${PUBLIC_HOST}/${PUBLIC_HOST}.crt
-      MTX_RTMPSERVERKEY: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${PUBLIC_HOST}/${PUBLIC_HOST}.key
+      MTX_RTMPSERVERCERT: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${LIVE_HOST:-${PUBLIC_HOST}}/${LIVE_HOST:-${PUBLIC_HOST}}.crt
+      MTX_RTMPSERVERKEY: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${LIVE_HOST:-${PUBLIC_HOST}}/${LIVE_HOST:-${PUBLIC_HOST}}.key
     ports:
       - "1935:1935"              # RTMP ingest (OBS, vMix, hardware encoders)
       - "1936:1936"              # RTMPS ingest (when RTMPS=optional)

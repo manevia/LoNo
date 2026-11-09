@@ -3,6 +3,9 @@
 {
 	email {$ACME_EMAIL}
 	cert_issuer acme
+	# Behind the Cloudflare proxy (CLOUDFLARE_PROXY=true), setup.sh writes caddy.d/cloudflare.caddy:
+	# trust CF-Connecting-IP only from Cloudflare's published address ranges.
+	import /etc/caddy/caddy.d/*.caddy
 }
 
 {$PUBLIC_HOST} {
@@ -12,9 +15,17 @@
 		-Server
 	}
 	reverse_proxy web:80 {
+		# The visitor's address as Caddy established it (from the connection, or from
+		# CF-Connecting-IP when the request really came from Cloudflare). A client-supplied
+		# X-Forwarded-For is never passed on.
+		header_up X-Forwarded-For {client_ip}
 		flush_interval -1
 		transport http {
 			response_header_timeout 10m
 		}
 	}
 }
+
+# A separate, unproxied name for live ingest when the website is behind Cloudflare
+# (setup.sh writes sites.d/live.caddy). It gets its own certificate for RTMPS.
+import /etc/caddy/sites.d/*.caddy
