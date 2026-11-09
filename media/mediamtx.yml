@@ -58,3 +58,7 @@ paths:
     source: publisher
   "~^tx/in[0-9a-f]{10}$":
     source: publisher
+  # Live Control Room: contributor feeds (c), converted encoder feeds (cw), and
+  # each contributor's private audio return (ret).
+  "~^room/r[0-9a-f]{10}/(c|cw|ret)/c[0-9a-f]{10}$":
+    source: publisher

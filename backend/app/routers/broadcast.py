@@ -558,6 +558,11 @@ async def mtx_auth(request: Request):
     user, password, action, path = b.get("user") or "", b.get("password") or "", b.get("action"), b.get("path") or ""
     if user == INTERNAL_USER and secrets.compare_digest(password, config.MEDIA_INTERNAL_SECRET):
         return Response(status_code=204)
+    if action == "publish" and path.startswith("room/"):
+        from .rooms import mtx_publish_allowed
+        if await mtx_publish_allowed(path, user, password):
+            return Response(status_code=204)
+        raise HTTPException(401)
     if action == "publish" and re.fullmatch(r"live/in[0-9a-f]{10}", path):
         key = password or (parse_qs(b.get("query") or "").get("key") or [""])[0]
         ing = await db.ingests.find_one({"id": path.split("/", 1)[1]})
@@ -570,6 +575,8 @@ async def mtx_auth(request: Request):
 
 async def on_feed_change(path: str, ready: bool):
     """Encoder connected/disconnected. Reconnect relays and recording when a live feed returns."""
+    if not path.startswith("live/"):
+        return
     ingest_id = path.split("/", 1)[1]
     s = await db.broadcast_sessions.find_one({"ingest_id": ingest_id, "status": {"$in": list(ACTIVE)}}, {"_id": 0})
     if not s:

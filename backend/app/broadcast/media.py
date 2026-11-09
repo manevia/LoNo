@@ -49,7 +49,7 @@ async def monitor(stop: asyncio.Event):
     """Poll every 2 s; notify listeners when a live/* path becomes ready or not."""
     known: set[str] = set()
     while not stop.is_set():
-        ready = {p for p in await list_ready() if p.startswith("live/")}
+        ready = {p for p in await list_ready() if p.startswith("live/") or (p.startswith("room/") and "/c/" in p)}
         for path in ready - known:
             for fn in listeners:
                 await _safe(fn, path, True)

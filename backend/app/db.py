@@ -38,3 +38,8 @@ async def ensure_indexes():
     await db.broadcast_sessions.create_index([("owner_id", 1), ("status", 1)])
     await db.broadcast_events.create_index([("session_id", 1), ("at", 1)])
     await db.recordings.create_index("id", unique=True)
+    await db.rooms.create_index("id", unique=True)
+    await db.contributors.create_index("id", unique=True)
+    await db.contributors.create_index("token_hash", unique=True)
+    await db.contributors.create_index([("room_id", 1), ("created_at", 1)])
+    await db.room_events.create_index([("room_id", 1), ("at", -1)])
