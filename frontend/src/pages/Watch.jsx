@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { api, API, errorText, resolveMedia } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfig } from "@/lib/config";
@@ -8,6 +8,8 @@ import { Loader2, Share2, Plus, Check, ThumbsUp, Sparkles, Coins, Captions, Grad
 import { toast } from "sonner";
 import ContentCard from "@/components/ContentCard";
 import MediaPlayer from "@/components/MediaPlayer";
+import TvVodPlayer from "@/components/tv/TvVodPlayer";
+import { usePrefs } from "@/lib/device";
 
 const pill = "flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 text-sm disabled:opacity-50 transition";
 
@@ -16,6 +18,8 @@ export default function Watch() {
   const nav = useNavigate();
   const { user, refresh } = useAuth();
   const cfg = useConfig();
+  const { tv } = usePrefs();
+  const location = useLocation();
   const [item, setItem] = useState(null);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState("");
@@ -93,6 +97,12 @@ export default function Watch() {
     finally { setTranscribing(false); }
   };
 
+  useEffect(() => {
+    if (tv && item && item.kind.startsWith("live")) {
+      nav(`/live/play/${item.id}?list=${item.kind === "live_radio" ? "radio" : "tv"}`, { replace: true });
+    }
+  }, [tv, item, nav]);
+
   if (error) return (
     <div className="min-h-[60vh] grid place-items-center text-center px-6">
       <div><p className="text-gray-300">{error}</p><Link to="/" className="mt-4 inline-block text-[#FF3B30]">Back to Home</Link></div>
@@ -102,6 +112,10 @@ export default function Watch() {
 
   const isAudio = ["music", "podcast", "live_radio"].includes(item.kind);
   const isLive = item.kind.startsWith("live");
+  const nextItem = item.similar?.find((s) => !s.kind.startsWith("live"));
+  const prevId = location.state?.prevId;
+  const goNext = nextItem ? () => nav(`/watch/${nextItem.id}`, { state: { prevId: item.id } }) : undefined;
+  const goPrev = prevId ? () => nav(-1) : undefined;
   const resumeAt = viewer.position_sec || 0;
   const onLoadedMetadata = (e) => {
     const m = e.currentTarget;
@@ -116,7 +130,11 @@ export default function Watch() {
     <div data-testid="watch-page" className="max-w-[1600px] mx-auto px-4 md:px-8 pt-6 pb-32">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8">
-          {isAudio ? (
+          {tv && !isLive ? (
+            <TvVodPlayer item={item} audio={isAudio} src={resolveMedia(item.stream_url)} poster={resolveMedia(item.thumbnail_url)}
+              artist={item.channel?.name} subtitleUrl={subtitleUrl} mediaProps={watch.mediaProps} onLoadedMetadata={onLoadedMetadata}
+              onNext={goNext} nextLabel={nextItem ? `Next: ${nextItem.title}` : undefined} onPrev={goPrev} />
+          ) : isAudio ? (
             <div className="relative rounded-2xl overflow-hidden bg-[#121212] ring-1 ring-white/10 aspect-video">
               <img loading="lazy" decoding="async" src={resolveMedia(item.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
               <div className="absolute inset-0 grid place-items-center p-6">

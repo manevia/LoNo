@@ -1,10 +1,10 @@
 // Remote-control navigation for TVs: arrow keys move focus to the nearest
 // focusable element in that direction, OK/Enter activates it, Back goes back.
 // Active only in TV mode, so arrow keys keep scrolling pages on computers.
+import { runBack } from "@/lib/backStack";
+import { tvKey, isTyping } from "@/lib/tvKeys";
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), video[controls], audio[controls], [tabindex]:not([tabindex="-1"])';
-const BACK_KEYS = new Set(["GoBack", "BrowserBack", "Escape"]);
-const BACK_CODES = new Set([10009 /* Samsung Tizen RETURN */, 461 /* LG webOS BACK */, 8 /* Backspace */]);
 
 function visible(el) {
   const r = el.getBoundingClientRect();
@@ -22,6 +22,18 @@ function candidates() {
 function center(r) { return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
 
 export function nextInDirection(from, dir, list = candidates()) {
+  // Stay inside the page's main content while it has somewhere to go in that
+  // direction; the top bar is reached from the top of the content, not skipped to.
+  const main = from.closest("main");
+  if (main) {
+    const inMain = list.filter((el) => main.contains(el));
+    const hit = pick(from, dir, inMain);
+    if (hit) return hit;
+  }
+  return pick(from, dir, list);
+}
+
+function pick(from, dir, list) {
   const a = from.getBoundingClientRect(), ca = center(a);
   let best = null, bestScore = Infinity;
   for (const el of list) {
@@ -40,24 +52,20 @@ export function nextInDirection(from, dir, list = candidates()) {
   return best;
 }
 
-function typing(el) {
-  if (!el) return false;
-  const tag = el.tagName;
-  return el.isContentEditable || tag === "TEXTAREA" || tag === "SELECT" ||
-    (tag === "INPUT" && !["checkbox", "radio", "button", "submit", "range"].includes(el.type));
-}
+const typing = isTyping;
 
 export function installSpatialNav(isEnabled) {
   const onKey = (e) => {
     if (!isEnabled()) return;
+    if (e.defaultPrevented) return; // a screen (e.g. the TV player) already handled this key
     const active = document.activeElement;
-    const isBack = BACK_KEYS.has(e.key) || BACK_CODES.has(e.keyCode);
 
-    if (isBack) {
-      if (typing(active) && e.keyCode === 8) return; // Backspace deletes text in fields
-      if (document.querySelector('[role="dialog"]')) return; // let dialogs close themselves
+    if (tvKey(e) === "back") {
+      if (typing(active) && (e.key === "Backspace" || e.keyCode === 8)) return; // Backspace deletes text in fields
       e.preventDefault();
-      if (window.history.length > 1) window.history.back();
+      if (runBack()) return;                                   // close the open overlay first
+      if (document.querySelector('[role="dialog"]')) return;   // library dialogs close themselves
+      if (window.history.length > 1) window.history.back();    // then leave the screen
       return;
     }
     if (!e.key.startsWith("Arrow")) return;

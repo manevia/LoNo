@@ -6,7 +6,7 @@ export default function ContentCard({ item, rank = null, compact = false }) {
   const isLive = item.kind === "live_tv" || item.kind === "live_radio";
   return (
     <Link
-      to={`/watch/${item.id}`}
+      to={item.kind?.startsWith("live") ? `/live/play/${item.id}?list=${item.kind === "live_radio" ? "radio" : "tv"}` : `/watch/${item.id}`}
       data-testid={`content-card-${item.id}`}
       className={`group relative ${compact ? "w-full" : "flex-shrink-0 w-[220px] md:w-[260px]"}`}
     >

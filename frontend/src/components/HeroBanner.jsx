@@ -22,7 +22,7 @@ export default function HeroBanner({ item }) {
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Link
-            to={`/watch/${item.id}`}
+            to={item.kind?.startsWith("live") ? `/live/play/${item.id}?list=${item.kind === "live_radio" ? "radio" : "tv"}` : `/watch/${item.id}`}
             data-testid="hero-play-btn"
             className="inline-flex items-center gap-2 bg-white text-black hover:bg-gray-200 rounded-full px-6 py-3 font-medium transition"
           >

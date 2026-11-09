@@ -12,7 +12,13 @@ const chip = "inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1.5 
  * controls (Media Session), picture-in-picture, casting and playback speed.
  */
 const MediaPlayer = forwardRef(function MediaPlayer(
-  { src, poster, audio = false, title, artist, artwork, subtitleUrl, live = false, mediaProps = {}, onLoadedMetadata, testId },
+  { src, poster, audio = false, title, artist, artwork, subtitleUrl, live = false, mediaProps = {}, onLoadedMetadata, testId,
+    nativeControls = true,     // false: the TV player draws remote-friendly controls instead
+    showOptions = true,        // speed/quality/PiP/Cast chips under the player
+    autoPlay = false,
+    onFatalError,              // (message) => void, when the stream can't be played
+    onHls,                     // (hls | null) => void, for audio tracks / live edge
+    className },
   ref,
 ) {
   const el = useRef(null);
@@ -24,6 +30,9 @@ const MediaPlayer = forwardRef(function MediaPlayer(
   const [pip, setPip] = useState(false);
   const [canCast, setCanCast] = useState(false);
   useImperativeHandle(ref, () => el.current);
+  // Keep callbacks current without re-attaching the stream when a parent re-renders.
+  const onFatalErrorRef = useRef(onFatalError); onFatalErrorRef.current = onFatalError;
+  const onHlsRef = useRef(onHls); onHlsRef.current = onHls;
 
   // Attach the source: native playback, or hls.js for .m3u8 where needed.
   useEffect(() => {
@@ -31,10 +40,14 @@ const MediaPlayer = forwardRef(function MediaPlayer(
     if (!media || !src) return;
     setLevels([]); setLevel(-1);
     let cancelled = false;
+    const fail = (msg) => { if (!cancelled) onFatalErrorRef.current?.(msg); };
+    const onMediaError = () => fail(media.error?.message || "This stream can't be played right now.");
+    media.addEventListener("error", onMediaError);
     const nativeHls = media.canPlayType("application/vnd.apple.mpegurl");
     if (!isHls(src) || nativeHls) {
       media.src = src;
-      return () => { media.removeAttribute("src"); media.load(); };
+      if (autoPlay) media.play().catch(() => {});
+      return () => { cancelled = true; media.removeEventListener("error", onMediaError); media.removeAttribute("src"); media.load(); };
     }
     import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
@@ -45,21 +58,30 @@ const MediaPlayer = forwardRef(function MediaPlayer(
         maxBufferLength: dataSaver ? 15 : 30,
       });
       hlsRef.current = hls;
+      onHlsRef.current?.(hls);
       hls.loadSource(src);
       hls.attachMedia(media);
+      if (autoPlay) hls.on(Hls.Events.MANIFEST_PARSED, () => media.play().catch(() => {}));
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
         const list = data.levels.map((l, i) => ({ index: i, label: l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)} kbps` }));
         setLevels(list);
         if (dataSaver && list.length) { hls.autoLevelCapping = 0; }
       });
+      let retries = 0;
       hls.on(Hls.Events.ERROR, (_, d) => {
         if (!d.fatal) return;
-        if (d.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-        else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        const manifest = /manifest/i.test(d.details || "");
+        if (d.type === Hls.ErrorTypes.NETWORK_ERROR && !manifest && retries++ < 2) hls.startLoad();
+        else if (d.type === Hls.ErrorTypes.MEDIA_ERROR && retries++ < 2) hls.recoverMediaError();
+        else fail(manifest ? "This channel isn't broadcasting right now." : "The stream stopped and couldn't reconnect.");
       });
-    });
-    return () => { cancelled = true; hlsRef.current?.destroy(); hlsRef.current = null; };
-  }, [src, dataSaver]);
+    }).catch(() => fail("The player couldn't load. Check your connection."));
+    return () => {
+      cancelled = true;
+      media.removeEventListener("error", onMediaError);
+      hlsRef.current?.destroy(); hlsRef.current = null; onHlsRef.current?.(null);
+    };
+  }, [src, dataSaver, autoPlay]);
 
   // Lock screen, headphones, car and TV remote media keys.
   useEffect(() => {
@@ -107,13 +129,14 @@ const MediaPlayer = forwardRef(function MediaPlayer(
   return (
     <div className="w-full">
       <Tag
-        ref={el} data-testid={testId} controls playsInline={!audio || undefined} crossOrigin="anonymous"
-        poster={audio ? undefined : poster} preload={dataSaver ? "none" : "metadata"}
+        ref={el} data-testid={testId} controls={nativeControls} playsInline={!audio || undefined} crossOrigin="anonymous"
+        tabIndex={nativeControls ? undefined : -1}
+        poster={audio ? undefined : poster} preload={dataSaver && !autoPlay ? "none" : "metadata"}
         onLoadedMetadata={onLoadedMetadata} {...mediaProps}
-        className={audio ? "w-full max-w-lg" : "w-full aspect-video rounded-2xl bg-black ring-1 ring-white/10 shadow-2xl"}>
+        className={className || (audio ? "w-full max-w-lg" : "w-full aspect-video rounded-2xl bg-black ring-1 ring-white/10 shadow-2xl")}>
         {subtitleUrl && !audio && <track key={subtitleUrl} kind="subtitles" label="English" srcLang="en" src={subtitleUrl} default />}
       </Tag>
-      <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Player options">
+      {showOptions && <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Player options">
         {!live && (
           <label className={chip}>
             <Gauge className="w-3.5 h-3.5" aria-hidden="true" />
@@ -144,7 +167,7 @@ const MediaPlayer = forwardRef(function MediaPlayer(
           </button>
         )}
         {dataSaver && <span className="text-xs text-gray-500">Data saver on</span>}
-      </div>
+      </div>}
     </div>
   );
 });

@@ -8,6 +8,7 @@ import AIChatFloat from "@/components/AIChatFloat";
 import Home from "@/pages/Home";
 import MobileNav from "@/components/MobileNav";
 import TermsBanner from "@/components/TermsBanner";
+import FocusRestorer from "@/components/FocusRestorer";
 import InstallBanner from "@/components/InstallBanner";
 
 // After a new deploy, an open tab may ask for page files that no longer exist.
@@ -44,6 +45,7 @@ const Certificate = page(() => import("@/pages/Certificate"));
 const CourseEditor = page(() => import("@/pages/CourseEditor"));
 const Settings = page(() => import("@/pages/Settings"));
 const Terms = page(() => import("@/pages/Terms"));
+const LivePlayer = page(() => import("@/pages/LivePlayer"));
 const Admin = page(() => import("@/pages/Admin"));
 
 const PageLoading = () => (
@@ -75,6 +77,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Toaster theme="dark" position="top-right" richColors />
+        <FocusRestorer />
         <Suspense fallback={<div className="min-h-screen bg-[#050505]"><PageLoading /></div>}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -89,6 +92,7 @@ export default function App() {
           <Route path="/studio" element={<Protected><Shell><Studio /></Shell></Protected>} />
           <Route path="/wallet" element={<Protected><Shell><Wallet /></Shell></Protected>} />
           <Route path="/studio/courses/:id" element={<Protected><Shell><CourseEditor /></Shell></Protected>} />
+          <Route path="/live/play/:id" element={<Suspense fallback={<div className="fixed inset-0 bg-black" />}><LivePlayer /></Suspense>} />
           <Route path="/terms" element={<Shell><Terms /></Shell>} />
           <Route path="/admin" element={<Protected><Shell><Admin /></Shell></Protected>} />
           <Route path="/settings" element={<Protected><Shell><Settings /></Shell></Protected>} />
