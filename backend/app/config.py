@@ -91,6 +91,10 @@ SECRET_ENC_KEY = _env("SECRET_ENC_KEY")                                         
 FFMPEG_BIN = _env("FFMPEG_BIN", "ffmpeg")
 RECORDINGS_DIR = _env("RECORDINGS_DIR", str(BACKEND_DIR / "data" / "recordings"))
 
+# Creator API
+API_RATE_PER_MINUTE = int(_env("API_RATE_PER_MINUTE", "120"))   # per integration
+WEBHOOK_ALLOW_PRIVATE = _bool("WEBHOOK_ALLOW_PRIVATE", False)    # only for local development/testing
+
 # Abuse protection
 LOGIN_MAX_FAILURES = int(_env("LOGIN_MAX_FAILURES", "5"))        # per email+IP
 LOGIN_WINDOW_SEC = int(_env("LOGIN_WINDOW_SEC", "900"))

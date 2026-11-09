@@ -43,3 +43,6 @@ async def ensure_indexes():
     await db.contributors.create_index("token_hash", unique=True)
     await db.contributors.create_index([("room_id", 1), ("created_at", 1)])
     await db.room_events.create_index([("room_id", 1), ("at", -1)])
+    await db.integrations.create_index("id", unique=True)
+    await db.integrations.create_index("owner_id")
+    await db.webhook_deliveries.create_index([("integration_id", 1), ("created_at", -1)])

@@ -8,14 +8,14 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import account, admin, ai, auth, broadcast, rooms, content, creator, creator_courses, files, governance, guide, learn, payments, wallet, watch
+from .routers import account, admin, ai, auth, broadcast, creator_api, rooms, content, creator, creator_courses, files, governance, guide, learn, payments, wallet, watch
 from .admin_setup import bootstrap_admins
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no per-request lines (and no URLs in logs)
-VERSION = "2.9.0"
+VERSION = "3.0.0"
 
 
 @asynccontextmanager
@@ -86,6 +86,8 @@ async def public_config():
     return config.features()
 
 
+api.include_router(creator_api.manage)
+api.include_router(creator_api.v1)
 app.include_router(api)
 app.include_router(broadcast.media_router)
 
