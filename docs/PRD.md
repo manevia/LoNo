@@ -87,6 +87,13 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Data saver: automatic on Save-Data/2G/3G; lighter images, no preloading
 - TV packages: Samsung Tizen and LG webOS hosted apps; Android TV/Fire TV WebView wrapper (template); Android TWA support via /.well-known/assetlinks.json; docs/DEVICES.md
 
+## v2.7 (Nov 2026): TV remote
+- Live area with Live TV, Radio, Guide (EPG with now/next, channel numbers) and Favorites (on device)
+- Full-screen live player: Channel Up/Down, Channels/Stations picker (stream keeps playing until OK), tuning banner, Retry / Return to previous stream, rapid-switch safety (one stream, one audio output), Play/Stop with reconnect, Pause/Rewind/Go Live on time-shift streams, program details
+- On-demand TV controls: play/pause, seek bar, resume, next/previous, captions, audio tracks, quality, speed, full screen with OK-to-reveal
+- Back closes overlays first and restores focus to the item the viewer came from; media and channel keys for Tizen, webOS, Android TV and HbbTV
+- Simulcast audit: the Studio's 10 destinations were display-only; no simulcast was functional before this release
+
 ## Backlog (post-MVP priorities)
 - **P1**: Offline downloads for audio and video; HLS transcoding of uploads (Mux/Cloudflare Stream); Apple TV and Roku native apps; email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction

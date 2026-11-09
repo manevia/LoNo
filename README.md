@@ -11,7 +11,7 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 
 - **Backend:** FastAPI + MongoDB (Motor), in `backend/`
 - **Frontend:** React 19 + Tailwind + shadcn/ui, in `frontend/`
-- **Version:** 2.6 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection, account controls, an admin console, and an installable app with TV mode and adaptive streaming)
+- **Version:** 2.7 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection, account controls, an admin console, an installable app with TV mode and adaptive streaming, and full TV-remote control of live TV, radio and on demand)
 
 ## Run it
 
@@ -63,7 +63,7 @@ cd frontend && yarn install && yarn start
 LoNo installs as an app on Android, iPhone, Windows and macOS, straight from the browser.
 It also has a **TV mode** you drive with a remote's arrow, OK and Back buttons. Packages for
 **Android TV / Google TV / Fire TV**, **Samsung (Tizen)** and **LG (webOS)** are in `apps/`.
-See **[docs/DEVICES.md](docs/DEVICES.md)** for each device.
+See **[docs/DEVICES.md](docs/DEVICES.md)** for each device and **[docs/TV-REMOTE.md](docs/TV-REMOTE.md)** for remote controls, the program guide and the TV test report.
 
 | | |
 |---|---|
