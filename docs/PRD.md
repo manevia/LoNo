@@ -122,6 +122,16 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Private recordings now need a signed, expiring link (the file URL alone was enough before)
 - Live API test 14/14 against the real media server
 
+## v3.1 (Nov 2026): Commercial pilot (sponsored replay passes)
+- Pilot mode: $LONO earned, redeemable, non-transferable; simulated purchases, signup bonus, new staking and $LONO creator payouts off; existing stakes stop accruing at pilot start; balances and history untouched
+- Staff campaigns: organizer, sponsor, replay, earning rule, points price, inventory, dates, access period; money recorded separately; opens only after sponsor payment, distribution permission and server-checked playback readiness; pause/resume/close; full change history
+- Fans: Offers, earn by verified watching, confirm and claim, My passes, mobile replay player
+- Consistent claim (reserve pass → deduct points → activate, undone on failure; idempotent; crash repair); last-pass race safe
+- Protected replay: files 403 directly; signed playback URL bound to the fan's cookie; access ends on reversal or expiry
+- Reversal: points restored once; pass returned only while the offer is open
+- Staff report with reconciliation; aggregate sponsor report and CSV; rebooking field
+- Staging rehearsal 27/27 on real MongoDB; operator guide
+
 ## Backlog (post-MVP priorities)
 - **P1**: Offline downloads for audio and video; HLS transcoding of uploads (Mux/Cloudflare Stream); Apple TV and Roku native apps; email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction

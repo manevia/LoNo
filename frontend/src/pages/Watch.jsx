@@ -110,6 +110,16 @@ export default function Watch() {
   );
   if (!item) return <div className="min-h-[70vh] grid place-items-center"><Loader2 className="w-8 h-8 animate-spin text-[#FF3B30]" /></div>;
 
+  if (item.gated) return (
+    <div className="max-w-xl mx-auto px-4 pt-16 pb-24 text-center" data-testid="gated-title">
+      <h1 className="font-display text-2xl">{item.title}</h1>
+      <p className="mt-2 text-gray-400">This replay needs a pass. Earn $LONO by watching on LoNo, then claim a pass.</p>
+      <div className="mt-5 flex justify-center gap-3">
+        {item.offer_id && <Link to={`/offers/${item.offer_id}`} className="bg-[#FF3B30] rounded-full px-5 py-2.5 text-sm font-medium">See the offer</Link>}
+        <Link to="/passes" className="bg-white/10 rounded-full px-5 py-2.5 text-sm">My passes</Link>
+      </div>
+    </div>
+  );
   const isAudio = ["music", "podcast", "live_radio"].includes(item.kind);
   const isLive = item.kind.startsWith("live");
   const nextItem = item.similar?.find((s) => !s.kind.startsWith("live"));

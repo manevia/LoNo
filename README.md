@@ -79,6 +79,10 @@ Installing on phones and TVs needs LoNo on a public **HTTPS** address. See Step 
 
 Creators can go live on LoNo from OBS or any RTMP/RTMPS/SRT encoder. They can simulcast to YouTube, Facebook, Twitch, Kick, X, TikTok, LinkedIn, Instagram or any custom server, with a separate status and retry for each destination, and record the broadcast. Off until enabled: run `start.cmd -Broadcast` (or `./start.sh --broadcast`), or use Docker mode; see **[docs/BROADCAST.md](docs/BROADCAST.md)**. Creators broadcast from **Creator Studio → Open Live Studio**, using their camera and microphone or an external encoder. Productions with an anchor and field reporters use the **Live Control Room**; see **[docs/CONTROL-ROOM.md](docs/CONTROL-ROOM.md)**. Tools and automations connect through the **Creator API**; see **[docs/CREATOR-API.md](docs/CREATOR-API.md)**.
 
+## Sponsored replay passes (commercial pilot)
+
+Sponsors fund a limited number of replay passes. Fans earn $LONO by watching on LoNo and redeem it for a pass. The organizer is paid in ordinary currency, and LoNo earns a campaign fee. Run with `PILOT_MODE=true`; staff use **Admin → Campaigns**. See **[docs/PILOT-OPERATOR-GUIDE.md](docs/PILOT-OPERATOR-GUIDE.md)**.
+
 ## Turning features on
 
 Everything below is optional. Without a key, the feature hides itself or explains that it's off.

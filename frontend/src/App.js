@@ -50,6 +50,10 @@ const LiveStudio = page(() => import("@/pages/LiveStudio"));
 const Join = page(() => import("@/pages/Join"));
 const ControlRoom = page(() => import("@/pages/ControlRoom"));
 const DeveloperAccess = page(() => import("@/pages/DeveloperAccess"));
+const OffersList = page(() => import("@/pages/Offers").then((m) => ({ default: m.OffersList })));
+const OfferDetail = page(() => import("@/pages/Offers").then((m) => ({ default: m.OfferDetail })));
+const MyPasses = page(() => import("@/pages/Passes").then((m) => ({ default: m.MyPasses })));
+const PassPlayer = page(() => import("@/pages/Passes").then((m) => ({ default: m.PassPlayer })));
 const Admin = page(() => import("@/pages/Admin"));
 
 const PageLoading = () => (
@@ -97,6 +101,10 @@ export default function App() {
           <Route path="/wallet" element={<Protected><Shell><Wallet /></Shell></Protected>} />
           <Route path="/join/:token" element={<Join />} />
           <Route path="/studio/control/:roomId?" element={<Protected><Shell><ControlRoom /></Shell></Protected>} />
+          <Route path="/offers" element={<Protected><Shell><OffersList /></Shell></Protected>} />
+          <Route path="/offers/:id" element={<Protected><Shell><OfferDetail /></Shell></Protected>} />
+          <Route path="/passes" element={<Protected><Shell><MyPasses /></Shell></Protected>} />
+          <Route path="/passes/:id" element={<Protected><Shell><PassPlayer /></Shell></Protected>} />
           <Route path="/studio/developers" element={<Protected><Shell><DeveloperAccess /></Shell></Protected>} />
           <Route path="/studio/live" element={<Protected><Shell><LiveStudio /></Shell></Protected>} />
           <Route path="/studio/courses/:id" element={<Protected><Shell><CourseEditor /></Shell></Protected>} />

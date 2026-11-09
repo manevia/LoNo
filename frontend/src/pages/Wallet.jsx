@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, errorText } from "@/lib/api";
 import { useConfig } from "@/lib/config";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { Loader2, ArrowUpRight, ArrowDownRight, Copy, Coins, TrendingUp, Lock, Unlock, CreditCard } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -87,12 +87,23 @@ export default function Wallet() {
               {total.toFixed(2)}
               <span className="text-2xl text-gray-400 ml-3 font-normal">$LONO</span>
             </div>
-            <div className="mt-2 text-sm text-gray-400">≈ ${(total * cfg.lono_price_usd).toFixed(2)} USD (simulated price)</div>
+            {cfg.pilot_mode ? (
+              <div className="mt-2 text-sm text-gray-400 max-w-xl" data-testid="pilot-note">Earn $LONO by watching on LoNo and spend it on offers such as replay passes. $LONO can't be bought, sold or transferred.</div>
+            ) : (
+              <div className="mt-2 text-sm text-gray-400">≈ ${(total * cfg.lono_price_usd).toFixed(2)} USD (simulated price)</div>
+            )}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
+              {cfg.pilot_mode ? (
+                <>
+                  <Link to="/offers" data-testid="wallet-offers" className="flex items-center gap-2 bg-[#FFB000] text-black rounded-full px-5 py-2.5 text-sm font-semibold">Offers</Link>
+                  <Link to="/passes" className="flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-5 py-2.5 text-sm">My passes</Link>
+                </>
+              ) : (
               <button onClick={() => setStakeOpen(true)} data-testid="stake-btn" className="flex items-center gap-2 bg-white text-black hover:bg-gray-200 rounded-full px-5 py-2.5 text-sm font-medium">
                 <Lock className="w-4 h-4" /> Stake
               </button>
+              )}
               {cfg.simulated_token_purchase && <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
                 <DialogTrigger asChild>
                   <button data-testid="buy-btn" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full px-5 py-2.5 text-sm font-medium">

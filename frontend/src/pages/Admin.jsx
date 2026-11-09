@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Download, Loader2, ShieldCheck } from "lucide-react";
+import Campaigns from "@/components/admin/Campaigns";
 import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Stars } from "@/components/Stars";
 
-const TABS = [["overview", "Overview"], ["reports", "Reports"], ["users", "Users"], ["courses", "Courses"], ["audit", "Audit log"]];
+const TABS = [["overview", "Overview"], ["campaigns", "Campaigns"], ["reports", "Reports"], ["users", "Users"], ["courses", "Courses"], ["audit", "Audit log"]];
 const card = "rounded-2xl bg-[#121212] border border-white/10";
 const btn = "text-xs rounded-full px-3 py-1.5 border transition disabled:opacity-40";
 const ACTION_LABELS = {
@@ -237,7 +238,7 @@ export default function Admin() {
         <Link to="/" className="mt-3 inline-block text-[#FF3B30]">Back to Home</Link></div>
     </div>
   );
-  const Panel = { overview: Overview, reports: Reports, users: Users, courses: Courses, audit: Audit }[tab] || Overview;
+  const Panel = { overview: Overview, campaigns: Campaigns, reports: Reports, users: Users, courses: Courses, audit: Audit }[tab] || Overview;
 
   return (
     <div data-testid="admin-page" className="max-w-6xl mx-auto px-4 md:px-8 pt-10 pb-32">

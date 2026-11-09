@@ -1,6 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
-import { Search, Radio, Wallet, User, LogOut, Home, Compass, Vote, BarChart3, Sparkles, Video, GraduationCap, ShieldCheck, Settings } from "lucide-react";
+import { Search, Radio, Wallet, User, LogOut, Home, Compass, Vote, BarChart3, Sparkles, Video, GraduationCap, ShieldCheck, Settings , Gift } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -14,6 +14,7 @@ const NAV = [
   { to: "/browse/podcast", label: "Podcasts", icon: Radio },
   { to: "/live", label: "Live", icon: Radio },
   { to: "/learn", label: "Learn", icon: GraduationCap },
+  { to: "/offers", label: "Offers", icon: Gift },
   { to: "/tokenomics", label: "Token", icon: BarChart3 },
   { to: "/governance", label: "DAO", icon: Vote },
 ];
