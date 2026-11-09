@@ -42,10 +42,16 @@ for kv in "MONGO_URL=mongomock://" "DB_NAME=lono" "JWT_SECRET=$(secret)" "CORS_O
 done
 if [[ -n "${NEW:-}" ]]; then say "Created backend/.env (in-memory database)."
 elif (( ${#added[@]} )); then say "Added missing settings to backend/.env: ${added[*]}"; fi
-if [[ ! -f "$FRONTEND/build/index.html" ]]; then
-  command -v node >/dev/null || fail "Install Node.js 20 to build the website once, then run this again."
-  say "Building the website (first run only)..."
-  (cd "$FRONTEND" && npx --yes yarn@1.22.22 install --frozen-lockfile && CI=false npx --yes yarn@1.22.22 build)
+# Rebuild the website when its code is newer than the last build (e.g. after git pull).
+INDEX="$FRONTEND/build/index.html"
+if [[ ! -f "$INDEX" ]] || [[ -n "$(find "$FRONTEND/src" "$FRONTEND/package.json" -newer "$INDEX" -type f -print -quit)" ]]; then
+  if ! command -v node >/dev/null; then
+    [[ -f "$INDEX" ]] || fail "Install Node.js 20 to build the website once, then run this again."
+    say "Website code changed but Node.js isn't installed: you'll see the OLD website until you install Node.js 20."
+  else
+    say "Building the website (only when its code has changed)..."
+    (cd "$FRONTEND" && npx --yes yarn@1.22.22 install --frozen-lockfile && CI=false npx --yes yarn@1.22.22 build)
+  fi
 fi
 say "Starting LoNo at http://localhost:$PORT  (Ctrl+C to stop)"
 cd "$BACKEND" && FRONTEND_DIR="$FRONTEND/build" exec .venv/bin/python -m uvicorn server:app --port "$PORT"

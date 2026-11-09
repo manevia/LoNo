@@ -35,7 +35,7 @@ Keep the window open while you use the app.
 The launcher sets up everything it needs on the first run:
 - a Python virtual environment and its packages
 - `backend/.env` with an in-memory database and a random secret
-- the website build, if it's missing (this needs Node.js 20)
+- the website build, if it's missing, **and again whenever the website code changes** (for example after `git pull`). This needs Node.js 20; without it you keep the old website, and the launcher says so
 
 The in-memory database resets when you stop the app. To keep data, set
 `MONGO_URL=mongodb://localhost:27017` in `backend/.env`, or use Docker mode.

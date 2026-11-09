@@ -90,19 +90,32 @@ if ($missing.Count -gt 0) {
   else { Say "Added missing settings to backend\.env: $($missing -join ', ')" }
 }
 
-# 4. Website build (needs Node.js once if it isn't already built)
+# 4. Website build. Rebuilds when the website's code is newer than the last build
+#    (for example after git pull). Needs Node.js 20+ for that step.
 $index = Join-Path $Frontend "build\index.html"
-if (-not (Test-Path $index)) {
-  if (-not (Have "node")) { Fail "The website hasn't been built yet and Node.js isn't installed. Install Node.js 20 LTS from nodejs.org, then run this again." }
-  Say "Building the website (first run only, 2-5 minutes)..."
-  Push-Location $Frontend
-  try {
-    & npx --yes yarn@1.22.22 install --frozen-lockfile --network-timeout 600000
-    if ($LASTEXITCODE -ne 0) { Fail "Installing website packages failed." }
-    $env:CI = "false"
-    & npx --yes yarn@1.22.22 build
-    if ($LASTEXITCODE -ne 0) { Fail "The website build failed." }
-  } finally { Pop-Location }
+$built = if (Test-Path $index) { (Get-Item $index).LastWriteTimeUtc } else { [datetime]::MinValue }
+$sources = @(Get-ChildItem -Recurse -File (Join-Path $Frontend "src")) + @(Get-Item (Join-Path $Frontend "package.json"))
+$newest = ($sources | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum
+$stale = $newest -gt $built
+if ($stale) {
+  if (-not (Have "node")) {
+    if (Test-Path $index) {
+      Write-Host "[lono] The website code changed but Node.js isn't installed, so it can't be rebuilt." -ForegroundColor Yellow
+      Write-Host "[lono] You'll see the OLD website until you install Node.js 20 LTS from nodejs.org and run this again." -ForegroundColor Yellow
+    } else {
+      Fail "The website hasn't been built yet and Node.js isn't installed. Install Node.js 20 LTS from nodejs.org, then run this again."
+    }
+  } else {
+    Say "Building the website (2-5 minutes; only when its code has changed)..."
+    Push-Location $Frontend
+    try {
+      & npx --yes yarn@1.22.22 install --frozen-lockfile --network-timeout 600000
+      if ($LASTEXITCODE -ne 0) { Fail "Installing website packages failed." }
+      $env:CI = "false"
+      & npx --yes yarn@1.22.22 build
+      if ($LASTEXITCODE -ne 0) { Fail "The website build failed." }
+    } finally { Pop-Location }
+  }
 }
 
 # 5. Run
