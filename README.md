@@ -11,7 +11,7 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 
 - **Backend:** FastAPI + MongoDB (Motor), in `backend/`
 - **Frontend:** React 19 + Tailwind + shadcn/ui, in `frontend/`
-- **Version:** 2.2 (rebuilt from the original Emergent prototype so it runs anywhere, plus the course builder and reviews)
+- **Version:** 2.3 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights and sign-in protection)
 
 ## Run it
 
@@ -123,7 +123,7 @@ Rules that keep the economy fair:
 cd backend && pytest
 ```
 
-29 API tests cover:
+37 API tests cover:
 
 - accounts
 - likes, My List and subscriptions
@@ -135,6 +135,8 @@ cd backend && pytest
 - the creator studio
 - the course builder: drafts, publishing, payouts, editing rules and AI question drafts
 - course reviews: who can review, averages, editing and deleting
+- sign-in and sign-up rate limits
+- wallet earnings insights, watch history and resume position
 
 ## Project layout
 
@@ -157,6 +159,15 @@ start.cmd / start.ps1    Windows launcher
 start.sh                 macOS/Linux launcher
 .github/workflows/ci.yml tests + web build + Docker build on every push
 ```
+
+## Abuse protection
+
+| Limit | Default | Setting |
+|---|---|---|
+| Failed sign-ins per email from one network, before a pause | 5 per 15 minutes | `LOGIN_MAX_FAILURES`, `LOGIN_WINDOW_SEC` |
+| New accounts from one network | 10 per hour | `SIGNUPS_PER_IP_PER_HOUR` |
+
+Limits are kept in the API process's memory, which suits the default single-process setup. If you run several API copies behind a load balancer, move them to Redis so the copies share counts.
 
 ## Before going live
 

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import EarningsInsights from "@/components/EarningsInsights";
 
 export default function Wallet() {
   const { refresh, user } = useAuth();
@@ -141,6 +142,8 @@ export default function Wallet() {
       </div>
 
       {/* Stakes */}
+      <EarningsInsights />
+
       <div className="mt-12">
         <h2 className="font-display text-2xl mb-4 flex items-center gap-2"><Lock className="w-5 h-5 text-[#FF3B30]" /> Active Stakes</h2>
         {data.stakes.length === 0 ? (

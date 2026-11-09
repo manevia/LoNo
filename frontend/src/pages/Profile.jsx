@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Award, LogOut } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, resolveMedia } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import ContentCard from "@/components/ContentCard";
 
@@ -10,10 +10,12 @@ export default function Profile() {
   const nav = useNavigate();
   const [learning, setLearning] = useState({ certificates: [] });
   const [list, setList] = useState([]);
+  const [history, setHistory] = useState([]);
 
   useEffect(() => {
     api.get("/learn/me").then(({ data }) => setLearning(data)).catch(() => {});
     api.get("/me/list").then(({ data }) => setList(data)).catch(() => {});
+    api.get("/me/history").then(({ data }) => setHistory(data)).catch(() => {});
   }, []);
 
   if (!user) return null;
@@ -61,6 +63,44 @@ export default function Profile() {
         ) : (
           <p className="mt-3 text-gray-400">Pass a course quiz to earn your first certificate. <Link to="/learn" className="text-white underline">Browse courses</Link></p>
         )}
+      </section>
+
+      <section className="mt-12" data-testid="watch-history">
+        <div className="flex items-end justify-between gap-3">
+          <h2 className="font-display text-xl">Recently watched</h2>
+          {history.length > 0 && (
+            <button onClick={async () => {
+              if (!window.confirm("Clear your watch history? Your earnings aren't affected.")) return;
+              await api.delete("/me/history"); setHistory([]);
+            }} className="text-sm text-gray-400 hover:text-white">Clear history</button>
+          )}
+        </div>
+        {history.length ? (
+          <ul className="mt-4 divide-y divide-white/10 border-y border-white/10">
+            {history.slice(0, 20).map((h) => (
+              <li key={h.content.id}>
+                <Link to={`/watch/${h.content.id}`} className="grid grid-cols-[112px_1fr_auto] gap-4 items-center py-3 hover:bg-white/[0.02]">
+                  <div className="relative">
+                    <img src={resolveMedia(h.content.thumbnail_url)} alt="" className="w-full aspect-video object-cover rounded-md ring-1 ring-white/10" />
+                    {h.percent != null && (
+                      <div className="absolute inset-x-1 bottom-1 h-1 rounded-full bg-black/60 overflow-hidden" aria-hidden="true">
+                        <div className="h-full bg-[#FF3B30]" style={{ width: `${Math.max(3, h.percent)}%` }} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{h.content.title}</div>
+                    <div className="text-xs text-gray-400 mt-0.5 capitalize">{h.content.kind.replace("_", " ")} / {h.content.category}</div>
+                  </div>
+                  <div className="text-xs text-gray-500 text-right whitespace-nowrap">
+                    {h.percent == null ? "Live" : h.percent >= 95 ? "Finished" : h.percent < 1 ? "Just started" : `${h.percent}% watched`}
+                    <div>{new Date(h.watched_at).toLocaleDateString()}</div>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="mt-3 text-gray-400">Titles you watch show up here so you can pick up where you left off.</p>}
       </section>
 
       <section className="mt-12">

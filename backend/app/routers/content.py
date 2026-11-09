@@ -76,7 +76,9 @@ async def get_content(content_id: str, user=Depends(get_user_optional)):
     course = await db.courses.find_one({"content_id": content_id}, {"_id": 0, "id": 1})
     c["course_id"] = course["id"] if course else None
     if user:
+        last = next((h for h in user.get("watch_history", []) if h["content_id"] == content_id), None)
         c["viewer"] = {
+            "position_sec": (last or {}).get("seconds", 0),
             "liked": content_id in user.get("liked", []),
             "in_list": content_id in user.get("my_list", []),
             "subscribed": c.get("channel_id") in user.get("subscribed_channels", []),
@@ -139,6 +141,33 @@ async def my_list(user=Depends(get_user)):
     items = await db.content.find({"id": {"$in": ids}}, P).to_list(200)
     order = {i: n for n, i in enumerate(ids)}
     return sorted(items, key=lambda c: order.get(c["id"], 0))
+
+
+@router.get("/me/history")
+async def history(user=Depends(get_user)):
+    """Recently watched titles, newest first, one row per title, with progress."""
+    seen, rows = set(), []
+    for h in user.get("watch_history", []):
+        if h["content_id"] not in seen:
+            seen.add(h["content_id"])
+            rows.append(h)
+    items = {c["id"]: c for c in await db.content.find({"id": {"$in": [r["content_id"] for r in rows]}}, P).to_list(200)}
+    out = []
+    for r in rows:
+        c = items.get(r["content_id"])
+        if not c:
+            continue  # title was removed
+        dur = c.get("duration_sec") or 0
+        pos = r.get("seconds", 0)
+        out.append({"content": c, "position_sec": pos, "watched_at": r["at"],
+                    "percent": min(100, round(100 * pos / dur)) if dur else None})
+    return out
+
+
+@router.delete("/me/history")
+async def clear_history(user=Depends(get_user)):
+    await db.users.update_one({"id": user["id"]}, {"$set": {"watch_history": []}})
+    return {"ok": True}
 
 
 @router.get("/channels")

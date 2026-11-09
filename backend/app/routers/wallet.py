@@ -42,6 +42,47 @@ def _accrued(s) -> float:
     return round(s["amount"] * (s["apy"] / 100) * (days / 365), 4)
 
 
+SOURCES = {"watch_to_earn": "watching", "learn_to_earn": "courses", "staking_reward": "staking",
+           "creator_payout": "creator", "signup_bonus": "bonus"}
+
+
+@router.get("/wallet/insights")
+async def insights(days: int = 30, user=Depends(get_user)):
+    """Daily earnings by source, watch time and viewing streak for the wallet chart."""
+    if days not in (7, 30, 90):
+        raise HTTPException(422, "days must be 7, 30 or 90")
+    today_dt = now()
+    dates = [(today_dt - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days - 1, -1, -1)]
+    start = dates[0]
+    series = {d: {"date": d, **{k: 0.0 for k in SOURCES.values()}, "watch_minutes": 0} for d in dates}
+    totals = {k: 0.0 for k in SOURCES.values()}
+    async for t in db.transactions.find({"user_id": user["id"], "kind": {"$in": list(SOURCES)},
+                                         "at": {"$gte": start}}, {"kind": 1, "amount": 1, "at": 1}):
+        d, src = t["at"][:10], SOURCES[t["kind"]]
+        if d in series:
+            series[d][src] = round(series[d][src] + t["amount"], 4)
+            totals[src] = round(totals[src] + t["amount"], 4)
+
+    watched = {}
+    async for w in db.watch_sessions.find({"user_id": user["id"]}, {"day": 1, "verified_sec": 1}):
+        watched[w["day"]] = watched.get(w["day"], 0) + w.get("verified_sec", 0)
+    for d in dates:
+        series[d]["watch_minutes"] = int(watched.get(d, 0) // 60)
+
+    # Streak: consecutive days, ending today (or yesterday if nothing yet today), with 1+ verified minute.
+    streak, cursor = 0, today_dt
+    if watched.get(cursor.strftime("%Y-%m-%d"), 0) < 60:
+        cursor -= timedelta(days=1)
+    while watched.get(cursor.strftime("%Y-%m-%d"), 0) >= 60:
+        streak += 1
+        cursor -= timedelta(days=1)
+
+    return {"days": days, "series": list(series.values()), "totals": totals,
+            "total_earned": round(sum(totals.values()), 4),
+            "watch_minutes": sum(v["watch_minutes"] for v in series.values()),
+            "streak_days": streak}
+
+
 @router.post("/wallet/stake")
 async def stake(body: StakeIn, user=Depends(get_user)):
     apy = APY[body.lock_days]

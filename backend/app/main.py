@@ -12,7 +12,7 @@ from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 
 
 @asynccontextmanager

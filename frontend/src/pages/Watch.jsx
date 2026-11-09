@@ -101,6 +101,15 @@ export default function Watch() {
 
   const isAudio = ["music", "podcast", "live_radio"].includes(item.kind);
   const isLive = item.kind.startsWith("live");
+  const resumeAt = viewer.position_sec || 0;
+  const onLoadedMetadata = (e) => {
+    const m = e.currentTarget;
+    if (isLive || resumeAt < 15 || !isFinite(m.duration) || resumeAt > m.duration - 30) return;
+    m.currentTime = resumeAt;
+    toast(`Resuming from ${Math.floor(resumeAt / 60)}:${String(Math.floor(resumeAt % 60)).padStart(2, "0")}`, {
+      action: { label: "Start over", onClick: () => { m.currentTime = 0; } },
+    });
+  };
 
   return (
     <div data-testid="watch-page" className="max-w-[1600px] mx-auto px-4 md:px-8 pt-6 pb-32">
@@ -110,12 +119,12 @@ export default function Watch() {
             <div className="relative rounded-2xl overflow-hidden bg-[#121212] ring-1 ring-white/10 aspect-video">
               <img src={resolveMedia(item.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
               <div className="absolute inset-0 grid place-items-center p-6">
-                <audio data-testid="audio-player" controls src={resolveMedia(item.stream_url)} className="w-full max-w-lg" {...watch.mediaProps} />
+                <audio data-testid="audio-player" controls src={resolveMedia(item.stream_url)} className="w-full max-w-lg" onLoadedMetadata={onLoadedMetadata} {...watch.mediaProps} />
               </div>
             </div>
           ) : (
             <video data-testid="video-player" key={item.id} src={resolveMedia(item.stream_url)} poster={resolveMedia(item.thumbnail_url)}
-              controls playsInline crossOrigin="anonymous" {...watch.mediaProps}
+              controls playsInline crossOrigin="anonymous" onLoadedMetadata={onLoadedMetadata} {...watch.mediaProps}
               className="w-full aspect-video rounded-2xl bg-black ring-1 ring-white/10 shadow-2xl">
               {subtitleUrl && <track key={subtitleUrl} kind="subtitles" label="English" srcLang="en" src={subtitleUrl} default />}
             </video>

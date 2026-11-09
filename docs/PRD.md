@@ -59,6 +59,11 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 ## v2.2 (Nov 2026)
 - Course reviews and ratings: verified learners only, one editable review each, averages and star breakdown on the course, Learn list, catalogue cards and Studio
 
+## v2.3 (Nov 2026)
+- Sign-in protection: pause after 5 failed attempts per email+network; 10 sign-ups per network per hour
+- Wallet "Your earnings": 7/30/90-day stacked chart by source (watching, courses, staking, creator payouts, bonuses), verified watch time, viewing streak
+- Profile "Recently watched" with progress and clear-history; players resume where you left off
+
 ## Backlog (post-MVP priorities)
 - **P1**: On-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction
