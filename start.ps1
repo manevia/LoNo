@@ -39,14 +39,20 @@ if ($Docker) {
 # ---------------- Local (Python) mode ----------------
 # 1. Find Python 3.10+ (skips the Microsoft Store stub that only prints nothing)
 $py = $null
-foreach ($cand in @(@("py", "-3"), @("python"), @("python3"))) {
+# Prefer versions LoNo's packages are tested on; very new Pythons can lack prebuilt packages.
+foreach ($cand in @(@("py", "-3.12"), @("py", "-3.13"), @("py", "-3.11"), @("py", "-3"), @("python"), @("python3"))) {
   if (-not (Have $cand[0])) { continue }
   $args_ = @(); if ($cand.Count -gt 1) { $args_ = $cand[1..($cand.Count - 1)] }
-  $ver = & $cand[0] @args_ -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+  # try/catch: Windows PowerShell 5.1 can turn a probe's error output into a fatal error
+  $ver = $null
+  try { $ver = & $cand[0] @args_ -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null } catch { $ver = $null }
   if ($ver -match "^3\.(\d+)$" -and [int]$Matches[1] -ge 10) { $py = $cand; break }
 }
 if (-not $py) { Fail "Python 3.10 or newer wasn't found. Install it from python.org and tick 'Add python.exe to PATH', then open a new window and run this again." }
 Say "Using Python $ver"
+if ([int]($ver.Split(".")[1]) -gt 13) {
+  Write-Host "[lono] Python $ver is newer than LoNo is tested with (3.11-3.13). If package installs fail, install Python 3.12 from python.org and run this again." -ForegroundColor Yellow
+}
 
 # 2. Virtual environment + dependencies (reinstalled only when requirements.txt changes)
 $venv = Join-Path $Backend ".venv"
