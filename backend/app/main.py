@@ -1,4 +1,5 @@
 """LoNo — hybrid media, broadcasting, streaming, learning and Web3 platform (API)."""
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -7,13 +8,14 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import account, admin, ai, auth, content, creator, creator_courses, files, governance, guide, learn, payments, wallet, watch
+from .routers import account, admin, ai, auth, broadcast, content, creator, creator_courses, files, governance, guide, learn, payments, wallet, watch
 from .admin_setup import bootstrap_admins
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-VERSION = "2.7.0"
+logging.getLogger("httpx").setLevel(logging.WARNING)  # no per-request lines (and no URLs in logs)
+VERSION = "2.8.0"
 
 
 @asynccontextmanager
@@ -34,13 +36,36 @@ async def lifespan(app: FastAPI):
         await seed_catalogue()
         await seed_courses()
     await bootstrap_admins()
+    stop = asyncio.Event()
+    tasks = []
+    if config.MEDIA_ENABLED:
+        from .broadcast import media
+        from .broadcast.relays import manager
+        media.listeners.append(broadcast.on_feed_change)
+        manager.on_change = broadcast.on_relay_change
+        tasks.append(asyncio.create_task(media.monitor(stop)))
+
+        async def publish_loop():
+            while not stop.is_set():
+                await broadcast.publish_due_recordings()
+                try:
+                    await asyncio.wait_for(stop.wait(), 30)
+                except asyncio.TimeoutError:
+                    pass
+        tasks.append(asyncio.create_task(publish_loop()))
     yield
+    stop.set()
+    if config.MEDIA_ENABLED:
+        from .broadcast.relays import manager
+        await manager.stop_all()
+    for t in tasks:
+        t.cancel()
     client.close()
 
 
 app = FastAPI(title="LoNo API", version=VERSION, lifespan=lifespan)
 api = APIRouter(prefix="/api")
-for r in (auth, account, admin, guide, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn):
+for r in (auth, account, admin, broadcast, guide, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn):
     api.include_router(r.router)
 
 
@@ -61,6 +86,7 @@ async def public_config():
 
 
 app.include_router(api)
+app.include_router(broadcast.media_router)
 
 
 @app.get("/.well-known/assetlinks.json", include_in_schema=False)

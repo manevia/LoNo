@@ -76,6 +76,20 @@ SUPPORT_EMAIL = _env("SUPPORT_EMAIL")              # shown on the Terms page for
 ANDROID_APP_PACKAGE = _env("ANDROID_APP_PACKAGE")            # e.g. lr.edu.ciu.lono
 ANDROID_CERT_SHA256 = [f.strip() for f in _env("ANDROID_CERT_SHA256").split(",") if f.strip()]
 
+# Live broadcasting (MediaMTX media server + ffmpeg relays). See docs/BROADCAST.md.
+MEDIA_ENABLED = _bool("MEDIA_ENABLED", False)
+MEDIA_API_URL = _env("MEDIA_API_URL", "http://127.0.0.1:9997").rstrip("/")     # MediaMTX control API
+MEDIA_HLS_URL = _env("MEDIA_HLS_URL", "http://127.0.0.1:8888").rstrip("/")     # MediaMTX HLS (proxied at /media/hls)
+MEDIA_WEBRTC_URL = _env("MEDIA_WEBRTC_URL", "http://127.0.0.1:8889").rstrip("/")  # WHIP for browser cameras
+MEDIA_RTMP_INTERNAL = _env("MEDIA_RTMP_INTERNAL", "rtmp://127.0.0.1:1935").rstrip("/")
+INGEST_RTMP_URL = _env("INGEST_RTMP_URL", "rtmp://localhost:1935/live")          # what creators paste into OBS
+INGEST_RTMPS_URL = _env("INGEST_RTMPS_URL", "")                                  # e.g. rtmps://live.example.org:1936/live
+INGEST_SRT_URL = _env("INGEST_SRT_URL", "srt://localhost:8890")
+MEDIA_INTERNAL_SECRET = _env("MEDIA_INTERNAL_SECRET") or ("internal-" + JWT_SECRET[:24])
+SECRET_ENC_KEY = _env("SECRET_ENC_KEY")                                          # encrypts stored stream keys
+FFMPEG_BIN = _env("FFMPEG_BIN", "ffmpeg")
+RECORDINGS_DIR = _env("RECORDINGS_DIR", str(BACKEND_DIR / "data" / "recordings"))
+
 # Abuse protection
 LOGIN_MAX_FAILURES = int(_env("LOGIN_MAX_FAILURES", "5"))        # per email+IP
 LOGIN_WINDOW_SEC = int(_env("LOGIN_WINDOW_SEC", "900"))
@@ -96,6 +110,7 @@ def features() -> dict:
         "storage": STORAGE_BACKEND,
         "heartbeat_sec": HEARTBEAT_SEC,
         "lono_price_usd": LONO_PRICE_USD,
+        "broadcasting": MEDIA_ENABLED,
         "terms_version": TERMS_VERSION,
         "support_email": SUPPORT_EMAIL or None,
     }

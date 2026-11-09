@@ -1,0 +1,53 @@
+# LoNo media server (MediaMTX 1.9). Receives creators' live feeds and serves HLS.
+# Secrets are NOT kept here: LoNo's API decides who may publish or read
+# (authMethod: http), and only the API reads HLS (with internal credentials).
+logLevel: warn
+logDestinations: [stdout]
+
+authMethod: http
+# Local mode (launcher): the API on this machine. Docker: overridden by MTX_AUTHHTTPADDRESS.
+authHTTPAddress: http://127.0.0.1:8001/api/broadcast/mtx/auth
+authHTTPExclude:
+  - action: api
+  - action: metrics
+  - action: pprof
+
+# Control API: status for LoNo. Keep it private (bound to localhost / internal network).
+api: yes
+apiAddress: 127.0.0.1:9997
+
+# RTMP ingest (OBS, vMix, Streamlabs, Wirecast, hardware encoders).
+rtmp: yes
+rtmpAddress: :1935
+# RTMPS: set rtmpEncryption: optional and provide a certificate (see docs/BROADCAST.md).
+rtmpEncryption: "no"
+rtmpsAddress: :1936
+rtmpServerKey: /certs/server.key
+rtmpServerCert: /certs/server.crt
+
+# SRT ingest (resilient on lossy links). Publish with streamid=publish:live/<ingest>:<ingest>:<key>
+srt: yes
+srtAddress: :8890
+
+# WebRTC (WHIP) ingest for cameras and microphones in Creator Studio.
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcAdditionalHosts: []
+
+# HLS output, read only by LoNo's API (/media/hls). 60 x 2 s = 2 minutes of rewind.
+hls: yes
+hlsAddress: 127.0.0.1:8888
+hlsVariant: fmp4
+hlsSegmentCount: 60
+hlsSegmentDuration: 2s
+hlsAlwaysRemux: yes
+
+rtsp: no
+
+pathDefaults:
+  record: no
+
+paths:
+  "~^live/in[0-9a-f]{10}$":
+    source: publisher
