@@ -11,7 +11,7 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 
 - **Backend:** FastAPI + MongoDB (Motor), in `backend/`
 - **Frontend:** React 19 + Tailwind + shadcn/ui, in `frontend/`
-- **Version:** 2.0, rebuilt from the original Emergent prototype so it runs anywhere
+- **Version:** 2.1 (rebuilt from the original Emergent prototype so it runs anywhere, plus the course builder)
 
 ## Run it
 
@@ -26,8 +26,8 @@ cd LoNo
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| Run locally | double-click `start.cmd` | `./start.sh` |
-| Run with Docker | `start.cmd -Docker` | `./start.sh --docker` |
+| Run locally | double-click `start.cmd` | `bash start.sh` |
+| Run with Docker | `start.cmd -Docker` | `bash start.sh --docker` |
 
 Local mode opens **http://localhost:8001**. Docker mode serves **http://localhost:8080**.
 Keep the window open while you use the app.
@@ -55,7 +55,7 @@ cd frontend && yarn install && yarn start
 ### Troubleshooting
 
 - **"This site can't be reached":** nothing is running on that port. Start the launcher and wait for `Ready`, and check the port: 8001 for local mode, 8080 for Docker.
-- **"Port … is already in use":** run on another port with `start.cmd -Port 8002` or `PORT=8002 ./start.sh`.
+- **"Port … is already in use":** run on another port with `start.cmd -Port 8002` or `PORT=8002 bash start.sh`.
 - **Docker "not running":** open Docker Desktop and wait for "Engine running".
 
 ## Turning features on
