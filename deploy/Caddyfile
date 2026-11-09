@@ -1,0 +1,20 @@
+# HTTPS front door for LoNo. Caddy obtains and renews the certificate itself;
+# ports 80 and 443 must be reachable from the internet and DNS must point here.
+{
+	email {$ACME_EMAIL}
+	cert_issuer acme
+}
+
+{$PUBLIC_HOST} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy web:80 {
+		flush_interval -1
+		transport http {
+			response_header_timeout 10m
+		}
+	}
+}

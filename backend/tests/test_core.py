@@ -82,3 +82,23 @@ def test_assetlinks(client, monkeypatch):
 def test_permissions_policy_allows_studio_devices(client):
     pp = client.get("/api/health").headers["permissions-policy"]
     assert "camera=(self)" in pp and "microphone=(self)" in pp and "geolocation=()" in pp
+
+
+def test_streaming_upload_and_limit(client, monkeypatch):
+    """Uploads stream to disk (no whole-file buffering); over-limit files are refused and leave nothing behind."""
+    import os
+    from app import config
+    from app.storage import storage
+    d = client.post("/api/auth/register", json={"email": f"up{os.urandom(3).hex()}@example.com", "password": "Passw0rd!",
+                                                "name": "Up", "accept_terms": True}).json()
+    h = {"Authorization": f"Bearer {d['token']}"}
+    payload = os.urandom(3 * 1024 * 1024 + 123)
+    r = client.post("/api/storage/upload", headers=h, files={"file": ("match.mp4", payload, "video/mp4")}).json()
+    assert r["size"] == len(payload)
+    got = client.get(r["url"]).content
+    assert got == payload
+    monkeypatch.setattr(config, "MAX_UPLOAD_MB", 1)
+    big = client.post("/api/storage/upload", headers=h, files={"file": ("big.mp4", payload, "video/mp4")})
+    assert big.status_code == 413
+    leftovers = list(storage.temp_dir().glob("*.part")) if hasattr(storage, "temp_dir") else []
+    assert leftovers == []

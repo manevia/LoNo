@@ -8,7 +8,7 @@ import re
 from datetime import timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Request, APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -195,3 +195,12 @@ async def audit_csv(action: str = "", days: int = 30, admin=Depends(get_admin)):
     await audit("audit_exported", admin, details={"rows": len(rows), "action": action, "days": days})
     return StreamingResponse(io.BytesIO(buf.getvalue().encode("utf-8-sig")), media_type="text/csv",
                              headers={"Content-Disposition": f'attachment; filename="lono-audit-{today()}.csv"'})
+
+
+@router.get("/request-info")
+async def request_info(request: Request, admin=Depends(get_admin)):
+    """How the API sees this request behind proxies (deployment check): the client
+    address should be the visitor's, and the scheme https in production."""
+    return {"client_ip": request.client.host if request.client else None, "scheme": request.url.scheme,
+            "host": request.headers.get("host"), "forwarded_for": request.headers.get("x-forwarded-for"),
+            "forwarded_proto": request.headers.get("x-forwarded-proto")}

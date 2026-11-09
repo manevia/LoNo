@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -18,17 +19,24 @@ async def upload(file: UploadFile = File(...), user=Depends(get_user)):
     if not ct.startswith(ALLOWED):
         raise HTTPException(400, "Upload a video, audio or image file")
     limit = config.MAX_UPLOAD_MB * 1024 * 1024
-    chunks, size = [], 0
-    while chunk := await file.read(1024 * 1024):
-        size += len(chunk)
-        if size > limit:
-            raise HTTPException(413, f"File is over the {config.MAX_UPLOAD_MB} MB limit")
-        chunks.append(chunk)
     name = file.filename or "upload"
     ext = re.sub(r"[^a-z0-9]", "", name.rsplit(".", 1)[-1].lower())[:5] if "." in name else "bin"
     fid = uid()
     key = f"uploads/{user['id']}/{fid}.{ext or 'bin'}"
-    await storage.put(key, b"".join(chunks), ct)
+    # Stream to a temporary file (1 MB at a time) so a long match recording never sits in memory.
+    tmp = storage.temp_dir() / f"{fid}.part"
+    size = 0
+    try:
+        with open(tmp, "wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > limit:
+                    raise HTTPException(413, f"File is over the {config.MAX_UPLOAD_MB} MB limit")
+                await asyncio.to_thread(out.write, chunk)
+        await storage.put_file(key, tmp, ct)
+    finally:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
     await db.files.insert_one({"id": fid, "user_id": user["id"], "storage_path": key, "original_filename": name,
                                "content_type": ct, "size": size, "is_deleted": False, "created_at": now_iso()})
     return {"file_id": fid, "path": key, "url": f"/api/files/{key}", "content_type": ct, "size": size}

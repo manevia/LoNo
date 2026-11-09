@@ -469,12 +469,12 @@ async def _finalize_recording(s: dict):
                                                  "-of", "default=nw=1:nk=1", str(out), stdout=asyncio.subprocess.PIPE)
     dur = (await probe.communicate())[0].decode().strip()
     key = f"recordings/{s['owner_id']}/{s['id']}.mp4"
-    data = out.read_bytes()
-    await storage.put(key, data, "video/mp4")
+    size = out.stat().st_size
+    await storage.put_file(key, out, "video/mp4")          # moved, not read into memory (recordings can be large)
     await db.files.insert_one({"id": uid(), "user_id": s["owner_id"], "storage_path": key, "original_filename": f"{s['title']}.mp4",
-                               "content_type": "video/mp4", "size": len(data), "is_deleted": False, "created_at": now_iso()})
+                               "content_type": "video/mp4", "size": size, "is_deleted": False, "created_at": now_iso()})
     await db.recordings.update_one({"id": rec["id"]}, {"$set": {
-        "status": "ready", "url": f"/api/files/{key}", "size": len(data),
+        "status": "ready", "url": f"/api/files/{key}", "size": size,
         "duration_sec": int(float(dur)) if dur else 0, "parts": len(parts)}})
     shutil.rmtree(folder, ignore_errors=True)
     await _event({**s}, "recording.ready", recording_id=rec["id"], duration_sec=int(float(dur)) if dur else 0)

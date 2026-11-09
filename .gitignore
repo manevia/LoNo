@@ -89,3 +89,4 @@ backend/.env.docker
 frontend/.env.local
 __pycache__/
 tools/
+deploy/.env

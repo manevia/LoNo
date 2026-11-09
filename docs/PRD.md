@@ -132,6 +132,12 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Staff report with reconciliation; aggregate sponsor report and CSV; rebooking field
 - Staging rehearsal 27/27 on real MongoDB; operator guide
 
+## v3.2 (Nov 2026): Production deployment
+- deploy/: Caddy HTTPS (Let's Encrypt), production compose with persistent data, setup script (DNS check, Docker, firewall, secrets, backups, RTMPS), backup and certificate-refresh jobs
+- Uploads stream to disk (full-match replays no longer held in memory); recordings moved, not copied, into storage; S3 multipart
+- Behind proxies: the API sees https and each visitor's real address (per-address limits work); forged forwarding headers discarded
+- Admin request-info check for deployments
+
 ## Backlog (post-MVP priorities)
 - **P1**: Offline downloads for audio and video; HLS transcoding of uploads (Mux/Cloudflare Stream); Apple TV and Roku native apps; email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction

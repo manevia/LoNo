@@ -1,0 +1,89 @@
+# LoNo production stack for https://lono.ciu.edu.lr (see docs/DEPLOY.md).
+# Start with:  sudo ./deploy/setup.sh   (first time)  or
+#              docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+name: lono
+
+services:
+  caddy:
+    # HTTPS with automatic Let's Encrypt certificates and renewal.
+    image: caddy:2.8.4
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"          # HTTP/3
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web]
+
+  web:
+    build:
+      context: ../frontend
+      args:
+        REACT_APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    restart: unless-stopped
+    depends_on: [backend]
+
+  backend:
+    build: ../backend
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      LOCAL_STORAGE_DIR: /app/data/uploads
+      RECORDINGS_DIR: /app/data/recordings
+      MEDIA_ENABLED: "true"
+      MEDIA_API_URL: http://media:9997
+      MEDIA_HLS_URL: http://media:8888
+      MEDIA_WEBRTC_URL: http://media:8889
+      MEDIA_RTMP_INTERNAL: rtmp://media:1935
+      MEDIA_RTSP_INTERNAL: rtsp://media:8554
+    volumes:
+      - lono-data:/app/data      # uploads (replays) and recordings
+    depends_on: [mongo, media]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    command: ["--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-1}"]
+    volumes:
+      - mongo-data:/data/db
+    # not published: only the API reaches it
+
+  media:
+    # Live ingest (RTMP/RTMPS/SRT/WebRTC) and HLS. Its control API and HLS stay internal.
+    image: bluenviron/mediamtx:1.9.3
+    restart: unless-stopped
+    volumes:
+      - ../media/mediamtx.yml:/mediamtx.yml:ro
+      - caddy-data:/caddy:ro     # the site certificate, for RTMPS (see rtmps-refresh.sh)
+    environment:
+      MTX_AUTHHTTPADDRESS: http://backend:8001/api/broadcast/mtx/auth
+      MTX_APIADDRESS: ":9997"
+      MTX_HLSADDRESS: ":8888"
+      MTX_RTSPADDRESS: ":8554"
+      MTX_WEBRTCADDITIONALHOSTS: ${PUBLIC_HOST}
+      MTX_RTMPENCRYPTION: ${RTMPS:-no}
+      MTX_RTMPSERVERCERT: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${PUBLIC_HOST}/${PUBLIC_HOST}.crt
+      MTX_RTMPSERVERKEY: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${PUBLIC_HOST}/${PUBLIC_HOST}.key
+    ports:
+      - "1935:1935"              # RTMP ingest (OBS, vMix, hardware encoders)
+      - "1936:1936"              # RTMPS ingest (when RTMPS=optional)
+      - "8890:8890/udp"          # SRT ingest
+      - "8189:8189/udp"          # WebRTC media for browser cameras and field reporters
+
+volumes:
+  caddy-data:
+  caddy-config:
+  lono-data:
+  mongo-data:

@@ -32,6 +32,17 @@ class LocalStorage:
         p.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(p.write_bytes, data)
 
+    def temp_dir(self) -> Path:
+        d = self.root / ".incoming"           # same filesystem, so the final move is instant
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    async def put_file(self, key: str, src: Path, content_type: str):
+        """Move a finished file into place without reading it into memory."""
+        p = self._path(key)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(lambda: __import__("shutil").move(str(src), str(p)))
+
     async def delete(self, key: str):
         p = self._path(key)
         await asyncio.to_thread(lambda: p.unlink(missing_ok=True))
@@ -101,6 +112,15 @@ class S3Storage:
 
     async def put(self, key: str, data: bytes, content_type: str):
         await asyncio.to_thread(self.s3.put_object, Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
+
+    def temp_dir(self) -> Path:
+        import tempfile
+        return Path(tempfile.gettempdir())
+
+    async def put_file(self, key: str, src: Path, content_type: str):
+        """Multipart upload straight from disk, then remove the local copy."""
+        await asyncio.to_thread(self.s3.upload_file, str(src), self.bucket, key, ExtraArgs={"ContentType": content_type})
+        src.unlink(missing_ok=True)
 
     async def delete(self, key: str):
         await asyncio.to_thread(self.s3.delete_object, Bucket=self.bucket, Key=key)

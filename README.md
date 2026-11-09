@@ -75,6 +75,10 @@ See **[docs/DEVICES.md](docs/DEVICES.md)** for each device and **[docs/TV-REMOTE
 
 Installing on phones and TVs needs LoNo on a public **HTTPS** address. See Step 0 in the guide.
 
+## Production: https://lono.ciu.edu.lr
+
+`deploy/` holds the production stack: Caddy (automatic HTTPS), the website, API, MongoDB and the media server. With an Ubuntu server and a DNS record in place, it installs with `sudo ./deploy/setup.sh`. See **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
 ## Live broadcasting (creators)
 
 Creators can go live on LoNo from OBS or any RTMP/RTMPS/SRT encoder. They can simulcast to YouTube, Facebook, Twitch, Kick, X, TikTok, LinkedIn, Instagram or any custom server, with a separate status and retry for each destination, and record the broadcast. Off until enabled: run `start.cmd -Broadcast` (or `./start.sh --broadcast`), or use Docker mode; see **[docs/BROADCAST.md](docs/BROADCAST.md)**. Creators broadcast from **Creator Studio → Open Live Studio**, using their camera and microphone or an external encoder. Productions with an anchor and field reporters use the **Live Control Room**; see **[docs/CONTROL-ROOM.md](docs/CONTROL-ROOM.md)**. Tools and automations connect through the **Creator API**; see **[docs/CREATOR-API.md](docs/CREATOR-API.md)**.
