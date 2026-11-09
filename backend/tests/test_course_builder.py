@@ -3,7 +3,7 @@ import uuid
 
 def make_user(client, name="Creator"):
     email = f"c_{uuid.uuid4().hex[:8]}@example.com"
-    d = client.post("/api/auth/register", json={"email": email, "password": "Passw0rd!", "name": name}).json()
+    d = client.post("/api/auth/register", json={"email": email, "password": "Passw0rd!", "name": name, "accept_terms": True}).json()
     return {"id": d["user"]["id"], "h": {"Authorization": f"Bearer {d['token']}"}}
 
 

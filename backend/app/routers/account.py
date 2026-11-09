@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..audit import audit
 from ..db import db
 from ..security import check_password, get_user, hash_password
 from ..storage import storage
@@ -59,6 +60,7 @@ async def change_password(body: PasswordIn, user=Depends(get_user)):
     _verify_password(u, body.current_password)
     await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": hash_password(body.new_password),
                                                             "password_changed_at": now_iso()}})
+    await audit("password_changed" if u.get("password_hash") else "password_set", user, target=user["id"])
     return {"ok": True}
 
 
@@ -90,6 +92,7 @@ async def _collect(user_id: str) -> dict:
 @router.get("/me/export")
 async def export(user=Depends(get_user)):
     data = await _collect(user["id"])
+    await audit("data_export", user, target=user["id"])
     buf = io.BytesIO(json.dumps(data, indent=2, ensure_ascii=False, default=str).encode())
     return StreamingResponse(buf, media_type="application/json", headers={
         "Content-Disposition": f'attachment; filename="lono-data-{today()}.json"'})
@@ -141,4 +144,7 @@ async def delete_account(body: DeleteIn, user=Depends(get_user)):
     await db.watch_sessions.update_many({"user_id": uid_}, {"$set": {"user_id": None}})
     await db.proposals.update_many({"author_id": uid_}, {"$set": {"author_id": None, "author_name": "Former member"}})
     await db.users.delete_one({"id": uid_})
+    # Evidence the erasure without keeping the erased data: id + email hash only.
+    await audit("account_deleted", {"id": uid_, "name": None}, target=uid_, subject_email=u["email"])
+    await db.audit_log.update_many({"actor_id": uid_}, {"$set": {"actor_name": None}})
     return {"ok": True, "deleted_at": now_iso()}

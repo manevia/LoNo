@@ -42,7 +42,7 @@ def test_signup_limit_per_network(client, monkeypatch):
     monkeypatch.setattr(auth.signups, "limit", 2)
     auth.signups.clear()
     mk = lambda: client.post("/api/auth/register", json={
-        "email": f"s_{uuid.uuid4().hex[:8]}@example.com", "password": "Passw0rd!", "name": "S"})
+        "email": f"s_{uuid.uuid4().hex[:8]}@example.com", "password": "Passw0rd!", "name": "S", "accept_terms": True})
     assert mk().status_code == 200 and mk().status_code == 200
     r = mk()
     assert r.status_code == 429 and "Too many new accounts" in r.json()["detail"]

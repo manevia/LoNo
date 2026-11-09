@@ -27,3 +27,7 @@ async def ensure_indexes():
     await db.certificates.create_index("id", unique=True)
     await db.reviews.create_index([("course_id", 1), ("user_id", 1)], unique=True)
     await db.reviews.create_index([("course_id", 1), ("updated_at", -1)])
+    await db.reviews.create_index("id", unique=True)
+    await db.reports.create_index([("status", 1), ("created_at", -1)])
+    await db.audit_log.create_index([("at", -1)])
+    await db.audit_log.create_index([("action", 1), ("at", -1)])

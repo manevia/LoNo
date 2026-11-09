@@ -65,7 +65,7 @@ def test_delete_account_erases_and_keeps_tallies(client):
     assert client.get(f"/api/channels/{ch['id']}").json()["subscribers"] == subs_before - 1
     assert client.get(up["url"]).status_code == 404
     # the email can be used again
-    again = client.post("/api/auth/register", json={"email": email, "password": "Passw0rd!", "name": "Back"})
+    again = client.post("/api/auth/register", json={"email": email, "password": "Passw0rd!", "name": "Back", "accept_terms": True})
     assert again.status_code == 200
 
 

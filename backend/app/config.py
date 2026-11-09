@@ -63,6 +63,11 @@ WATCH_REWARD_PER_MIN = float(_env("WATCH_REWARD_PER_MIN", "1"))
 WATCH_REWARD_CAP_PER_TITLE = float(_env("WATCH_REWARD_CAP_PER_TITLE", "10"))
 WATCH_REWARD_DAILY_CAP = float(_env("WATCH_REWARD_DAILY_CAP", "60"))
 HEARTBEAT_SEC = int(_env("HEARTBEAT_SEC", "30"))
+# Administration and compliance
+ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS").split(",") if e.strip()}
+TERMS_VERSION = _env("TERMS_VERSION", "2026-11")  # bump when the terms change; new consent is recorded
+SUPPORT_EMAIL = _env("SUPPORT_EMAIL")              # shown on the Terms page for privacy requests
+
 # Abuse protection
 LOGIN_MAX_FAILURES = int(_env("LOGIN_MAX_FAILURES", "5"))        # per email+IP
 LOGIN_WINDOW_SEC = int(_env("LOGIN_WINDOW_SEC", "900"))
@@ -83,6 +88,8 @@ def features() -> dict:
         "storage": STORAGE_BACKEND,
         "heartbeat_sec": HEARTBEAT_SEC,
         "lono_price_usd": LONO_PRICE_USD,
+        "terms_version": TERMS_VERSION,
+        "support_email": SUPPORT_EMAIL or None,
     }
 
 

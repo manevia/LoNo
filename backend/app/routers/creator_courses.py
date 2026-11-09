@@ -169,7 +169,7 @@ async def publish(course_id: str, user=Depends(get_user)):
             "is_premium": False, "channel_id": c["channel_id"], "views": 0, "likes": 0, "rating": None,
             "year": now().year, "created_at": now_iso()})
     await db.courses.update_one({"id": course_id}, {"$set": {
-        "status": "published", "content_id": content_id, "published_at": now_iso()}})
+        "status": "published", "content_id": content_id, "published_at": now_iso(), "moderation_note": None}})
     return {"status": "published", "content_id": content_id, "url": f"/learn/{course_id}"}
 
 

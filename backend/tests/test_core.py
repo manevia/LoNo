@@ -25,7 +25,7 @@ def test_register_login_me(client, user):
     me = client.get("/api/auth/me", headers=user["h"]).json()
     assert me["wallet"]["lono_balance"] == 100 and "password_hash" not in me
     assert client.post("/api/auth/login", json={"email": user["email"], "password": "nope"}).status_code == 400
-    dup = client.post("/api/auth/register", json={"email": user["email"], "password": "Passw0rd!", "name": "X"})
+    dup = client.post("/api/auth/register", json={"email": user["email"], "password": "Passw0rd!", "name": "X", "accept_terms": True})
     assert dup.status_code == 400
 
 

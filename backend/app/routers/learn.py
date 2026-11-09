@@ -167,7 +167,7 @@ async def submit_quiz(course_id: str, body: QuizIn, user=Depends(get_user)):
 
 async def _refresh_rating(course: dict):
     total, count, dist = 0, 0, {str(i): 0 for i in range(1, 6)}
-    async for r in db.reviews.find({"course_id": course["id"]}, {"rating": 1}):
+    async for r in db.reviews.find({"course_id": course["id"], "hidden": {"$ne": True}}, {"rating": 1}):
         total += r["rating"]
         count += 1
         dist[str(r["rating"])] += 1
@@ -183,7 +183,7 @@ async def _refresh_rating(course: dict):
 async def reviews(course_id: str, limit: int = 20, user=Depends(get_user_optional)):
     c = await _course(course_id)
     limit = max(1, min(limit, 100))
-    items = await db.reviews.find({"course_id": course_id}, {"_id": 0}).sort("updated_at", -1).to_list(limit)
+    items = await db.reviews.find({"course_id": course_id, "hidden": {"$ne": True}}, {"_id": 0}).sort("updated_at", -1).to_list(limit)
     mine = await db.reviews.find_one({"course_id": course_id, "user_id": user["id"]}, {"_id": 0}) if user else None
     can_review = False
     if user and c.get("owner_id") != user["id"]:
@@ -217,6 +217,25 @@ async def write_review(course_id: str, body: ReviewIn, user=Depends(get_user)):
     summary = await _refresh_rating(c)
     review = await db.reviews.find_one({"id": rid}, {"_id": 0, "user_id": 0})
     return {"review": review, "summary": summary}
+
+
+class ReportIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/reviews/{review_id}/report")
+async def report_review(review_id: str, body: ReportIn, user=Depends(get_user)):
+    r = await db.reviews.find_one({"id": review_id, "hidden": {"$ne": True}}, {"user_id": 1, "course_id": 1})
+    if not r:
+        raise HTTPException(404, "Review not found")
+    if r["user_id"] == user["id"]:
+        raise HTTPException(400, "You can't report your own review")
+    if await db.reports.find_one({"target_id": review_id, "reporter_id": user["id"], "status": "open"}):
+        return {"ok": True, "already_reported": True}
+    await db.reports.insert_one({"id": uid(), "kind": "review", "target_id": review_id, "course_id": r["course_id"],
+                                 "reporter_id": user["id"], "reason": body.reason.strip(), "status": "open",
+                                 "created_at": now_iso()})
+    return {"ok": True}
 
 
 @router.delete("/courses/{course_id}/review")
