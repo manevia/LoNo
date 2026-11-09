@@ -7,12 +7,12 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import ai, auth, content, creator, creator_courses, files, governance, learn, payments, wallet, watch
+from .routers import account, ai, auth, content, creator, creator_courses, files, governance, learn, payments, wallet, watch
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 
 
 @asynccontextmanager
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LoNo API", version=VERSION, lifespan=lifespan)
 api = APIRouter(prefix="/api")
-for r in (auth, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn):
+for r in (auth, account, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn):
     api.include_router(r.router)
 
 
@@ -49,6 +49,19 @@ async def public_config():
 
 
 app.include_router(api)
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    resp = await call_next(request)
+    h = resp.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")          # no MIME sniffing of uploads
+    h.setdefault("X-Frame-Options", "DENY")                    # no clickjacking via iframes
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(self)")
+    if request.url.path.startswith("/api/") and "cache-control" not in h:
+        h["Cache-Control"] = "no-store"                        # API answers can be personal
+    return resp
 
 if config.FRONTEND_DIR:
     from pathlib import Path

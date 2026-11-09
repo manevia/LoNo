@@ -60,3 +60,11 @@ def test_like_list_subscribe(client, user):
     assert s["subscribed"] is True
     rails = client.get("/api/content/rails", headers=user["h"]).json()
     assert rails[0]["key"] == "mylist"
+
+
+def test_security_headers(client):
+    r = client.get("/api/health")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["cache-control"] == "no-store"
+    assert "strict-origin" in r.headers["referrer-policy"]

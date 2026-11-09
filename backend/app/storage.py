@@ -29,6 +29,10 @@ class LocalStorage:
         p.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(p.write_bytes, data)
 
+    async def delete(self, key: str):
+        p = self._path(key)
+        await asyncio.to_thread(lambda: p.unlink(missing_ok=True))
+
     async def read(self, key: str) -> bytes:
         p = self._path(key)
         if not p.exists():
@@ -87,6 +91,9 @@ class S3Storage:
 
     async def put(self, key: str, data: bytes, content_type: str):
         await asyncio.to_thread(self.s3.put_object, Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
+
+    async def delete(self, key: str):
+        await asyncio.to_thread(self.s3.delete_object, Bucket=self.bucket, Key=key)
 
     async def read(self, key: str) -> bytes:
         obj = await asyncio.to_thread(self.s3.get_object, Bucket=self.bucket, Key=key)

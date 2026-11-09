@@ -95,4 +95,5 @@ async def google(body: GoogleIn):
 
 @router.get("/me")
 async def me(user=Depends(get_user)):
-    return user
+    has_pw = await db.users.count_documents({"id": user["id"], "password_hash": {"$exists": True}})
+    return {**user, "has_password": bool(has_pw)}
