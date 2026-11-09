@@ -80,8 +80,15 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Support contact lono@ciu.edu.lr on the Terms page
 - Fix: sign-in responses carry is_admin / needs_terms, so the Admin menu and terms banner appear without a reload
 
+## v2.6 (Nov 2026)
+- Installable app: web manifest, icons (incl. maskable and iOS), service worker (fast repeat visits, image cache, offline screen), Install banner and Settings entry, iOS instructions
+- TV mode: auto-detected on TV browsers or with ?tv=1; spatial remote navigation (arrows/OK/Back incl. Tizen 10009 and webOS 461), larger type, focus highlight, overscan margins
+- Player: adaptive HLS via hls.js (loaded on demand), quality menu, data-saver start at lowest quality, Media Session controls, picture-in-picture, Cast to TV, playback speed
+- Data saver: automatic on Save-Data/2G/3G; lighter images, no preloading
+- TV packages: Samsung Tizen and LG webOS hosted apps; Android TV/Fire TV WebView wrapper (template); Android TWA support via /.well-known/assetlinks.json; docs/DEVICES.md
+
 ## Backlog (post-MVP priorities)
-- **P1**: Email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
+- **P1**: Offline downloads for audio and video; HLS transcoding of uploads (Mux/Cloudflare Stream); Apple TV and Roku native apps; email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction
 - **P2**: Real blockchain settlement layer, WalletConnect / MetaMask integration
 - **P2**: Marketplace (NFT, merch, tickets, licenses), programmatic ads platform, developer portal + SDK

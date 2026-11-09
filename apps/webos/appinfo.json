@@ -1,0 +1,14 @@
+{
+  "id": "lr.edu.ciu.lono",
+  "version": "1.0.0",
+  "vendor": "CIU",
+  "type": "web",
+  "main": "index.html",
+  "title": "LoNo",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#050505",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "requiredPermissions": []
+}

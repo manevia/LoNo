@@ -11,7 +11,7 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 
 - **Backend:** FastAPI + MongoDB (Motor), in `backend/`
 - **Frontend:** React 19 + Tailwind + shadcn/ui, in `frontend/`
-- **Version:** 2.5 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection, account controls and an admin console)
+- **Version:** 2.6 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection, account controls, an admin console, and an installable app with TV mode and adaptive streaming)
 
 ## Run it
 
@@ -57,6 +57,23 @@ cd frontend && yarn install && yarn start
 - **"This site can't be reached":** nothing is running on that port. Start the launcher and wait for `Ready`, and check the port: 8001 for local mode, 8080 for Docker.
 - **"Port … is already in use":** run on another port with `start.cmd -Port 8002` or `PORT=8002 bash start.sh`.
 - **Docker "not running":** open Docker Desktop and wait for "Engine running".
+
+## Phones, computers and smart TVs
+
+LoNo installs as an app on Android, iPhone, Windows and macOS, straight from the browser.
+It also has a **TV mode** you drive with a remote's arrow, OK and Back buttons. Packages for
+**Android TV / Google TV / Fire TV**, **Samsung (Tizen)** and **LG (webOS)** are in `apps/`.
+See **[docs/DEVICES.md](docs/DEVICES.md)** for each device.
+
+| | |
+|---|---|
+| **Installable app** | Manifest, icons, a service worker for fast repeat visits, an offline screen and an Install banner on phones |
+| **TV mode** | Turns on automatically on TV browsers, or with `?tv=1` or in Settings. Larger text, a clear focus highlight, remote navigation, overscan margins |
+| **Adaptive streaming** | HLS (`.m3u8`) with automatic quality switching and a quality menu |
+| **Data saver** | Automatic when the device asks to save data. Smaller images, no preloading, lowest video quality first |
+| **Player** | Playback speed, picture-in-picture, Cast to TV, lock-screen and headphone controls |
+
+Installing on phones and TVs needs LoNo on a public **HTTPS** address. See Step 0 in the guide.
 
 ## Turning features on
 

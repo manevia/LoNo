@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Samsung Smart TV (Tizen) hosted web app: opens the live LoNo site in TV mode.
+     Replace https://lono.ciu.edu.lr with your real HTTPS address, then build/sign
+     with Tizen Studio (see docs/DEVICES.md). -->
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://lono.ciu.edu.lr/tizen" version="1.0.0" viewmodes="maximized">
+    <tizen:application id="LoNoTVapp.LoNo" package="LoNoTVapp" required_version="6.0"/>
+    <tizen:profile name="tv-samsung"/>
+    <content src="https://lono.ciu.edu.lr/?tv=1"/>
+    <access origin="*" subdomains="true"/>
+    <tizen:allow-navigation>*</tizen:allow-navigation>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+                   encryption="disable" install-location="auto" hwkey-event="enable"/>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <icon src="icon.png"/>
+    <name>LoNo</name>
+</widget>
