@@ -1,6 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
-import { Search, Radio, Wallet, User, LogOut, Home, Compass, Vote, BarChart3, Sparkles, Video, GraduationCap } from "lucide-react";
+import { Search, Radio, Wallet, User, LogOut, Home, Compass, Vote, BarChart3, Sparkles, Video, GraduationCap, ShieldCheck, Settings } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -104,6 +104,14 @@ export default function Navbar() {
               <DropdownMenuItem data-testid="menu-profile" onClick={() => nav("/profile")} className="cursor-pointer focus:bg-white/10">
                 <User className="w-4 h-4 mr-2" /> Profile
               </DropdownMenuItem>
+              <DropdownMenuItem data-testid="menu-settings" onClick={() => nav("/settings")} className="cursor-pointer focus:bg-white/10">
+                <Settings className="w-4 h-4 mr-2" /> Settings
+              </DropdownMenuItem>
+              {user.is_admin && (
+                <DropdownMenuItem data-testid="menu-admin" onClick={() => nav("/admin")} className="cursor-pointer focus:bg-white/10">
+                  <ShieldCheck className="w-4 h-4 mr-2" /> Admin
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator className="bg-white/10" />
               <DropdownMenuItem data-testid="menu-logout" onClick={() => { logout(); nav("/"); }} className="cursor-pointer focus:bg-white/10 text-[#FF3B30]">
                 <LogOut className="w-4 h-4 mr-2" /> Sign out

@@ -11,7 +11,7 @@ simulated utility token ($LONO) that viewers earn by watching and learning, then
 
 - **Backend:** FastAPI + MongoDB (Motor), in `backend/`
 - **Frontend:** React 19 + Tailwind + shadcn/ui, in `frontend/`
-- **Version:** 2.4 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection and account controls)
+- **Version:** 2.5 (rebuilt from the original Emergent prototype so it runs anywhere; adds the course builder, reviews, earnings insights, sign-in protection, account controls and an admin console)
 
 ## Run it
 
@@ -123,7 +123,7 @@ Rules that keep the economy fair:
 cd backend && pytest
 ```
 
-43 API tests cover:
+50 API tests cover:
 
 - accounts
 - likes, My List and subscriptions
@@ -139,6 +139,8 @@ cd backend && pytest
 - wallet earnings insights, watch history and resume position
 - account settings: profile, password, data export and account deletion
 - security headers
+- admin console: permissions, moderation, suspensions, course takedowns, audit log and CSV export
+- consent at sign-up
 
 ## Project layout
 
@@ -185,6 +187,24 @@ Signed-in users manage their account at **Profile → Settings**:
 Vote totals, view counts and subscriber numbers they contributed to stay, with no link to them. Learners who passed their courses keep their certificates.
 
 Every response also carries security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`). API responses are marked `Cache-Control: no-store` so shared devices and proxies don't keep personal data.
+
+## Admin console and compliance records
+
+**Admins:** add their email addresses to `ADMIN_EMAILS` in `backend/.env`, separated by commas, and restart. No button in the app grants admin rights, so nobody can promote themselves. Admins see **Admin** in the account menu. It has five sections:
+
+| Section | What it's for |
+|---|---|
+| **Overview** | Accounts, today's viewers, courses, certificates, open reports, and data downloads and deletions in the last 30 days |
+| **Reports** | Reviews that members reported. Hide a review (it leaves the course's rating) or dismiss the report. Hidden reviews can be restored |
+| **Users** | Search by name or email. Suspend an account with a reason, or reinstate it. A suspended account can't sign in or use the API |
+| **Courses** | Every course with its creator and stats. Unpublish one with a note the creator sees in their editor |
+| **Audit log** | Every consent, data download, account deletion, password change and admin action. Filter it, and download it as CSV |
+
+**Consent:** sign-up requires accepting the Terms and the $LONO disclosure (`/terms`). The version accepted is stored on the account and in the audit log. When you change the terms, raise `TERMS_VERSION`, and signed-in users see a banner asking them to accept the new version.
+
+**Erasure evidence:** when someone deletes their account, the audit log keeps only their internal ID and a SHA-256 fingerprint of their email, never the email itself. Their name is removed from earlier log entries.
+
+**Before launch:** the Terms page (`frontend/src/pages/Terms.jsx`) is a plain-language starting template. Have a lawyer review it for the countries you operate in, and set `SUPPORT_EMAIL` so users know where to send privacy requests.
 
 ## Before going live
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { useConfig } from "@/lib/config";
@@ -56,6 +56,9 @@ export default function GoogleButton({ text = "continue_with", onDone }) {
   return (
     <>
       <div ref={ref} data-testid="google-signin" className="mt-8 w-full flex justify-center min-h-[44px]" />
+      <p className="mt-2 text-xs text-gray-500 text-center">
+        Continuing with Google means you agree to the <Link to="/terms" className="underline hover:text-gray-300">Terms and $LONO disclosure</Link>.
+      </p>
       <div className="my-6 flex items-center gap-3 text-xs text-gray-500">
         <div className="flex-1 h-px bg-white/10" /> or use email <div className="flex-1 h-px bg-white/10" />
       </div>

@@ -119,7 +119,11 @@ export default function Profile() {
       <button data-testid="profile-logout" onClick={() => { logout(); nav("/"); }} className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5 hover:bg-white/10">
         <LogOut className="w-4 h-4" /> Sign out
       </button>
+      {user.is_admin && (
+        <Link to="/admin" className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-5 py-2.5 hover:bg-white/10">Admin</Link>
+      )}
       </div>
+      <p className="mt-8 text-sm text-gray-500"><Link to="/terms" className="hover:text-gray-300 underline">Terms and $LONO disclosure</Link></p>
     </div>
   );
 }

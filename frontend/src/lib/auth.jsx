@@ -27,8 +27,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => accept((await api.post("/auth/login", { email, password })).data);
-  const register = async (email, password, name) =>
-    accept((await api.post("/auth/register", { email, password, name })).data);
+  const register = async (email, password, name, acceptTerms) =>
+    accept((await api.post("/auth/register", { email, password, name, accept_terms: acceptTerms })).data);
   const googleLogin = async (credential) => accept((await api.post("/auth/google", { credential })).data);
 
   const logout = () => {

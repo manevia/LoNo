@@ -14,11 +14,13 @@ export default function Signup() {
 
   useEffect(() => { if (user) nav("/"); }, [user, nav]);
 
+  const [agreed, setAgreed] = useState(false);
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
-      await register(form.email, form.password, form.name);
+      await register(form.email, form.password, form.name, agreed);
       toast.success("Welcome to LoNo! +100 $LONO bonus.");
       nav("/");
     } catch (err) {
@@ -49,6 +51,7 @@ export default function Signup() {
 
           <GoogleButton text="signup_with" />
 
+
           <form onSubmit={submit} className="mt-8 space-y-3">
             <input data-testid="signup-name" required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                    className="w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-[#FF3B30]/40" />
@@ -56,7 +59,12 @@ export default function Signup() {
                    className="w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-[#FF3B30]/40" />
             <input data-testid="signup-password" required type="password" placeholder="Password (min 8 chars)" minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                    className="w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-[#FF3B30]/40" />
-            <button data-testid="signup-submit" disabled={busy} className="w-full bg-[#FF3B30] hover:bg-[#FF5C53] rounded-full py-3 font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+            <label className="flex items-start gap-3 px-1 pt-1 text-sm text-gray-300 cursor-pointer">
+              <input data-testid="signup-terms" type="checkbox" required checked={agreed} onChange={(e) => setAgreed(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-[#FF3B30] shrink-0" />
+              <span>I agree to the <Link to="/terms" target="_blank" className="text-white underline">Terms and $LONO disclosure</Link>, including that $LONO is an in-app token with no cash value.</span>
+            </label>
+            <button data-testid="signup-submit" disabled={busy || !agreed} className="w-full bg-[#FF3B30] hover:bg-[#FF5C53] rounded-full py-3 font-medium disabled:opacity-50 flex items-center justify-center gap-2">
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Create account
             </button>
           </form>

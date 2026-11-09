@@ -137,6 +137,14 @@ export default function CourseEditor() {
         {published && <Link to={`/learn/${id}`} className="text-sm text-gray-300 hover:text-white inline-flex items-center gap-1">View on Learn <ExternalLink className="w-3.5 h-3.5" /></Link>}
       </div>
 
+      {meta.moderation_note && !published && (
+        <div role="note" data-testid="moderation-note" className="mt-6 p-4 rounded-xl border border-[#FF3B30]/30 bg-[#FF3B30]/[0.06] text-sm">
+          <div className="font-medium text-[#FF8A82]">A LoNo moderator unpublished this course</div>
+          <p className="mt-1 text-gray-300">Reason: {meta.moderation_note}</p>
+          <p className="mt-1 text-gray-400">Fix the issue, then publish again.</p>
+        </div>
+      )}
+
       {/* Checklist */}
       <div data-testid="checklist" className={`mt-6 p-4 rounded-xl border ${problems.length ? "border-[#FFB000]/30 bg-[#FFB000]/[0.06]" : "border-[#34C759]/30 bg-[#34C759]/[0.06]"}`}>
         {problems.length ? (

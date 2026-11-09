@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, errorText } from "@/lib/api";
 import { Stars, StarPicker } from "@/components/Stars";
+import { useAuth } from "@/lib/auth";
+
+const REASONS = ["Spam or advertising", "Offensive or abusive", "Off-topic or misleading", "Contains personal information"];
 
 /** Reviews for a course: summary, the viewer's own review form (if they passed), and the list. */
 export default function CourseReviews({ courseId, passed, onChange }) {
@@ -9,6 +12,9 @@ export default function CourseReviews({ courseId, passed, onChange }) {
   const [form, setForm] = useState({ rating: 0, text: "" });
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [reporting, setReporting] = useState(null); // review id with the report form open
+  const [reported, setReported] = useState(() => new Set());
+  const { user } = useAuth();
 
   const load = useCallback(async () => {
     const { data } = await api.get(`/learn/courses/${courseId}/reviews`);
@@ -38,6 +44,14 @@ export default function CourseReviews({ courseId, passed, onChange }) {
       await api.delete(`/learn/courses/${courseId}/review`);
       setForm({ rating: 0, text: "" }); setEditing(false); await load(); onChange?.();
     } catch (err) { toast.error(errorText(err)); }
+  };
+
+  const report = async (reviewId, reason) => {
+    try {
+      await api.post(`/learn/reviews/${reviewId}/report`, { reason });
+      setReported((s) => new Set(s).add(reviewId)); setReporting(null);
+      toast.success("Thanks. A moderator will take a look.");
+    } catch (err) { toast.error(errorText(err, "The report wasn't sent")); }
   };
 
   const showForm = can_review && (!mine || editing);
@@ -115,6 +129,20 @@ export default function CourseReviews({ courseId, passed, onChange }) {
                       )}
                     </div>
                     {r.text && <p className="mt-3 text-sm text-gray-300 leading-relaxed whitespace-pre-line max-w-[68ch]">{r.text}</p>}
+                    {user && !isMine && (
+                      reported.has(r.id) ? <p className="mt-2 text-xs text-gray-500">Reported. Thanks.</p>
+                      : reporting === r.id ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Why are you reporting this review?">
+                          <span className="text-xs text-gray-400">Why?</span>
+                          {REASONS.map((why) => (
+                            <button key={why} onClick={() => report(r.id, why)} className="text-xs rounded-full px-3 py-1 bg-white/5 border border-white/10 hover:bg-white/10">{why}</button>
+                          ))}
+                          <button onClick={() => setReporting(null)} className="text-xs text-gray-500 hover:text-white">Cancel</button>
+                        </div>
+                      ) : (
+                        <button data-testid="report-review" onClick={() => setReporting(r.id)} className="mt-2 text-xs text-gray-500 hover:text-gray-300">Report</button>
+                      )
+                    )}
                   </li>
                 );
               })}

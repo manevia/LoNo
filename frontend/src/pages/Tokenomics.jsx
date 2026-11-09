@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Loader2, TrendingUp, Flame, Users, Coins, Shield, Activity } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -35,6 +36,10 @@ export default function Tokenomics() {
           </div>
         </div>
       </div>
+      <p data-testid="lono-disclosure" className="mt-4 text-sm text-gray-400 max-w-3xl">
+        $LONO is an in-app token with no cash value. Prices and market figures on this page are simulated for illustration.{" "}
+        <Link to="/terms#lono" className="text-white underline">Read the disclosure</Link>
+      </p>
 
       <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="Market Cap" value={`$${fmt(data.market_cap)}`} icon={TrendingUp} />

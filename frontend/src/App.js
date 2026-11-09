@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 import AIChatFloat from "@/components/AIChatFloat";
 import Home from "@/pages/Home";
 import MobileNav from "@/components/MobileNav";
+import TermsBanner from "@/components/TermsBanner";
 
 // After a new deploy, an open tab may ask for page files that no longer exist.
 // Reload once to pick up the new version instead of showing a broken page.
@@ -41,6 +42,8 @@ const Course = page(() => import("@/pages/Course"));
 const Certificate = page(() => import("@/pages/Certificate"));
 const CourseEditor = page(() => import("@/pages/CourseEditor"));
 const Settings = page(() => import("@/pages/Settings"));
+const Terms = page(() => import("@/pages/Terms"));
+const Admin = page(() => import("@/pages/Admin"));
 
 const PageLoading = () => (
   <div className="min-h-[60vh] grid place-items-center" role="status" aria-label="Loading">
@@ -58,6 +61,7 @@ const Protected = ({ children }) => {
 const Shell = ({ children }) => (
   <div className="min-h-screen bg-[#050505] text-white">
     <Navbar />
+    <TermsBanner />
     <main className="pb-16 lg:pb-0"><Suspense fallback={<PageLoading />}>{children}</Suspense></main>
     <AIChatFloat />
     <MobileNav />
@@ -83,6 +87,8 @@ export default function App() {
           <Route path="/studio" element={<Protected><Shell><Studio /></Shell></Protected>} />
           <Route path="/wallet" element={<Protected><Shell><Wallet /></Shell></Protected>} />
           <Route path="/studio/courses/:id" element={<Protected><Shell><CourseEditor /></Shell></Protected>} />
+          <Route path="/terms" element={<Shell><Terms /></Shell>} />
+          <Route path="/admin" element={<Protected><Shell><Admin /></Shell></Protected>} />
           <Route path="/settings" element={<Protected><Shell><Settings /></Shell></Protected>} />
           <Route path="/learn" element={<Shell><Learn /></Shell>} />
           <Route path="/learn/:id" element={<Shell><Course /></Shell>} />

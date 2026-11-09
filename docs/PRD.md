@@ -69,8 +69,13 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Security headers on every response; API responses not cached
 - Faster first load: pages download on demand (main bundle about 155 kB gzipped, down from about 300 kB), lazy images, safe reload after deploys
 
+## v2.5 (Nov 2026)
+- Admin console (ADMIN_EMAILS): overview, review reports (hide, dismiss, restore), user suspension, course takedown with creator-visible note
+- Compliance records: versioned terms consent at sign-up and re-consent banner; audit log of consents, data downloads, deletions, password changes and admin actions; CSV export with formula-injection protection; erasure evidenced by email hash only
+- Terms page with plain-language $LONO disclosure; disclosure line on the token page
+
 ## Backlog (post-MVP priorities)
-- **P1**: Compliance dashboard (KYC/AML provider integration, consent records, data-request log); on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
+- **P1**: KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction
 - **P2**: Real blockchain settlement layer, WalletConnect / MetaMask integration
 - **P2**: Marketplace (NFT, merch, tickets, licenses), programmatic ads platform, developer portal + SDK

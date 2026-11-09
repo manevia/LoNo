@@ -87,7 +87,7 @@ export default function Settings() {
       <section className="mt-10" aria-labelledby="s-data">
         <h2 id="s-data" className="font-display text-xl mb-3">Your data</h2>
         <div className={card}>
-          <p className="text-sm text-gray-300">Download everything LoNo stores about you: your profile, wallet history, stakes, watch history, votes, courses, certificates, reviews and uploads, as one JSON file.</p>
+          <p className="text-sm text-gray-300">See how LoNo handles your data in the <Link to="/terms#privacy" className="text-white underline">Terms</Link>. Download everything LoNo stores about you: your profile, wallet history, stakes, watch history, votes, courses, certificates, reviews and uploads, as one JSON file.</p>
           <button data-testid="export-data" onClick={exportData} disabled={busy === "export"}
             className="mt-4 inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-5 py-2.5 text-sm disabled:opacity-50">
             {busy === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download my data
