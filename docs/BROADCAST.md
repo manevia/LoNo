@@ -6,12 +6,12 @@ Creators send a live feed to LoNo. LoNo can:
 - forward it to their social destinations at the same time,
 - record it.
 
-Status: **phase 1 of 4** (broadcast core).
+Status: **phase 2 of 4** (broadcast core, plus Live Studio and Devices & Sources).
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Ingest (RTMP / RTMPS / SRT), rotatable stream key, private test sessions, go live on LoNo, simulcast with per-destination status and retry, encoder reconnect, recording with an explicit publish choice | **Done (API)** |
-| 2 | Creator Studio screens: Go Live, destinations, ingest details, preview, recordings. **Devices & Sources** (browser camera and mic, meters, monitoring, Test Setup) | Next |
+| 2 | **Live Studio** (Creator Studio → Open Live Studio): Devices & Sources, external encoder settings, destinations, private test with preview, Go live, per-destination status and Retry, activity log, End, recordings | **Done** |
 | 3 | Creator API: scoped credentials, signed webhooks, docs and examples, test environment | Planned |
 | 4 | End-to-end verification with real encoders (OBS Studio and others) and hardware | Planned |
 
@@ -39,6 +39,32 @@ Creator Studio camera/mic (phase 2)                  ──WebRTC (WHIP)──�
   - never returned after saving (only a hint like `…1234`)
   - removed from error messages
   - kept out of the API's and the media server's logs
+
+## Live Studio (Creator Studio → Open Live Studio)
+
+**Devices & Sources: "This device"**
+- **Inputs:** cameras, microphones, USB audio interfaces and capture cards (Elgato, Magewell, Blackmagic and other UVC/UAC devices, which appear as cameras and microphones), with live preview, resolution and fps.
+- **Setup:** creators can rename devices and choose a quality (480p, 720p or 1080p). Choices are remembered on the device.
+- **Audio:** an audio meter (dBFS, with peak hold and clipping warning) and mute.
+- **Monitoring:** choose headphones or speakers where the browser allows output selection (Chrome and Edge do; Safari and Firefox use the system output). Monitoring plays a separate copy of the mic to that output only, never into the broadcast.
+- **Switching sources while live** replaces the track without reconnecting.
+- **Unplugging a device:** a warning appears with **Reconnect**, or the creator chooses a replacement. The broadcast keeps running.
+- **Behind the scenes:** the browser sends WebRTC (WHIP) to LoNo's API, which adds the stream key server-side, so the key never reaches the browser.
+- **Browser codecs:** browsers send Opus audio and often VP8 video. LoNo converts these **once** to H.264/AAC (`tx/<ingest>`), and LoNo viewers, the preview, destinations and the recording all use that copy. Encoder feeds that are already H.264/AAC aren't converted.
+
+**External encoder:** server URLs (RTMP / RTMPS / SRT), the stream key (masked, with Show, Copy and New stream key), and setup steps for OBS Studio, vMix, Streamlabs, Wirecast and hardware encoders and mixers.
+
+**Test Setup** checks:
+- **Framing:** resolution and fps, plus a rule-of-thirds grid.
+- **Audio levels:** a 5-second measurement giving good, too quiet or clipping.
+- **Audio/video sync:** a clap check against the private preview, confirmed by the creator. LoNo doesn't measure sync automatically.
+- **Connection:** outgoing bitrate, round trip and packet loss from WebRTC stats, or the encoder feed's bitrate.
+
+**Broadcast:**
+- **Before going live:** title, description, TV or Radio, Record, and the destinations to send to. A **private test** shows "What LoNo receives" (preview, tracks, bitrate) without publishing or simulcasting.
+- **Go live:** ends the test, starts the broadcast once the feed is connected, then shows each destination's status, error and **Retry**, plus an activity log.
+- **End broadcast:** stops LoNo and every destination.
+- **Recordings:** private until **Publish now**, **Schedule**, or **Make private**.
 
 ## Running it
 
@@ -174,6 +200,34 @@ Fast API tests with a faked media server (`backend/tests/test_broadcast.py`) run
   - publish now, back to private, schedule
 - **Logs:** no stream keys in the API or media server logs.
 
+### Phase 2 test report (Nov 2026, sandbox)
+
+The solo-creator workflow was tested in a browser (Playwright, Chromium 141) using Chromium's **simulated camera and microphone** (`--use-fake-device-for-media-stream`). No real camera, microphone or headset was used.
+
+**Result:** 23 of 24 checks passed.
+- **Devices and Test Setup:**
+  - camera preview at 1280×720, device lists
+  - microphone meter moving
+  - renaming a device, mute, monitoring playback
+  - Test Setup level, framing and connection checks
+- **Destinations:** adding YouTube, Facebook and Twitch through the UI; Discord can't be chosen.
+- **Private test:**
+  - the camera reaches LoNo over WebRTC (VP8 + Opus)
+  - nothing sent to destinations
+- **Live:**
+  - go live from the Studio, with the YouTube (RTMP) and Facebook (RTMPS) stand-ins live
+  - Twitch failing while the others continue, with its error and Retry, and Retry bringing only Twitch live
+  - a **separate TV viewer** opening the broadcast, switching channels with Channel Up/Down and leaving, with no effect on any destination
+  - a camera disconnect shown, then reconnected while staying live
+- **End and recording:**
+  - ending stops LoNo and all destinations
+  - recording private by default, then published
+- **Logs:** no stream keys.
+
+**The 1 failed check:** the private preview showed no picture. The sandbox Chromium can't decode H.264 (it lacks proprietary codecs), and the converted preview is H.264. `ffprobe` confirmed the preview carries H.264 video and AAC audio, converted from a VP8 + Opus source. Chrome, Edge, Safari and smart TVs decode H.264.
+
+**Also found and fixed in this phase:** the security header from release 2.4 (`Permissions-Policy: camera=()`) blocked LoNo's own pages from using the camera and microphone. It now allows them for LoNo only (`camera=(self)`).
+
 **Not tested yet:**
 
 | Area | Not yet tested |
@@ -181,5 +235,6 @@ Fast API tests with a faked media server (`backend/tests/test_broadcast.py`) run
 | **Real social platforms** | None of YouTube, Facebook, Twitch, Kick, X, TikTok, LinkedIn or Instagram. Delivery was verified against stand-in servers using the same protocols. Real platforms need the creator's account and stream key |
 | **Discord** | Can't be supported (no ingest) |
 | **Encoders** | **OBS Studio, vMix, Streamlabs, Wirecast:** none tested (no desktop available); planned for phase 4. Only ffmpeg was used, over RTMP, RTMPS and SRT |
-| **Hardware** | No cameras, capture cards or mixers; this phase doesn't use them |
+| **Hardware** | No real cameras, microphones, headsets, capture cards or mixers; only Chromium's simulated devices. Output-device selection (`setSinkId`) wasn't exercised with real headphones |
+| **Browsers** | Only Chromium (Playwright build). Chrome, Edge, Safari and Firefox weren't tested; Safari and Firefox don't support choosing the monitoring output |
 | **Docker** | The compose file was validated, but the full Docker stack with the media server hasn't been run (no Docker in the sandbox). CI builds the images |
