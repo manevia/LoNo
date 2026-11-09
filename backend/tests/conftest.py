@@ -10,6 +10,7 @@ os.environ.update({
     "MONGO_URL": "mongomock://", "DB_NAME": "lono_test", "JWT_SECRET": "test-secret",
     "LOCAL_STORAGE_DIR": tempfile.mkdtemp(), "ANTHROPIC_API_KEY": "", "TRANSCRIBE_API_KEY": "",
     "OPENAI_API_KEY": "", "STRIPE_API_KEY": "", "GOOGLE_CLIENT_ID": "",
+    "SIGNUPS_PER_IP_PER_HOUR": "100000",
 })
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

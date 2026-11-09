@@ -1,14 +1,19 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
 from .. import config
 from ..db import db
 from ..ledger import credit, new_wallet
+from ..ratelimit import RateLimiter, client_ip
 from ..security import check_password, get_user, hash_password, make_token
 from ..util import clean, now_iso, uid
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+login_failures = RateLimiter(config.LOGIN_MAX_FAILURES, config.LOGIN_WINDOW_SEC,
+                             "Too many failed sign-in attempts.")
+signups = RateLimiter(config.SIGNUPS_PER_IP_PER_HOUR, 3600, "Too many new accounts from this network.")
 
 
 class RegisterIn(BaseModel):
@@ -45,18 +50,27 @@ async def create_user(email: str, name: str, provider: str, password: str | None
 
 
 @router.post("/register")
-async def register(body: RegisterIn):
+async def register(body: RegisterIn, request: Request):
+    ip = client_ip(request)
+    signups.check(ip)
     if await db.users.find_one({"email": body.email.lower()}):
         raise HTTPException(400, "That email already has an account. Sign in instead.")
     user = await create_user(body.email, body.name, "email", password=body.password)
+    signups.hit(ip)
     return {"token": make_token(user["id"]), "user": user}
 
 
 @router.post("/login")
-async def login(body: LoginIn):
+async def login(body: LoginIn, request: Request):
+    # Keyed on email+IP: an attacker can't lock a real user out from elsewhere,
+    # and one IP can't hammer one account.
+    key = f"{body.email.lower()}|{client_ip(request)}"
+    login_failures.check(key)
     u = await db.users.find_one({"email": body.email.lower()})
     if not u or not u.get("password_hash") or not check_password(body.password, u["password_hash"]):
+        login_failures.hit(key)
         raise HTTPException(400, "Email or password is incorrect")
+    login_failures.reset(key)
     return {"token": make_token(u["id"]), "user": clean(u)}
 
 
