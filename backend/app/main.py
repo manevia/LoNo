@@ -7,13 +7,13 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import account, admin, ai, auth, content, creator, creator_courses, files, governance, learn, payments, wallet, watch
+from .routers import account, admin, ai, auth, content, creator, creator_courses, files, governance, guide, learn, payments, wallet, watch
 from .admin_setup import bootstrap_admins
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-VERSION = "2.6.0"
+VERSION = "2.7.0"
 
 
 @asynccontextmanager
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LoNo API", version=VERSION, lifespan=lifespan)
 api = APIRouter(prefix="/api")
-for r in (auth, account, admin, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn):
+for r in (auth, account, admin, guide, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn):
     api.include_router(r.router)
 
 
@@ -104,7 +104,7 @@ if config.FRONTEND_DIR:
         f = (web / path).resolve()
         if path and web in f.parents and f.is_file():
             # The service worker must be re-checked on every visit so updates roll out.
-            no_cache = path in ("sw.js", "manifest.webmanifest", "index.html")
+            no_cache = path in ("sw.js", "manifest.webmanifest", "index.html") or path.endswith(".m3u8")  # live playlists change constantly
             return FileResponse(f, headers={"Cache-Control": "no-cache"} if no_cache else None)
         return FileResponse(web / "index.html", headers={"Cache-Control": "no-cache"})  # client-side routes
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=config.CORS_ORIGINS != ["*"],
