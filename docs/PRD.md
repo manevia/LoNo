@@ -115,6 +115,13 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Automatic fallback to the anchor/standby on network evidence; destinations reconnect automatically after a drop
 - Acceptance test 24/24 (anchor + 2 reporters in separate processes, drop and reconnect, mix-minus verified with ffmpeg)
 
+## v3.0 (Nov 2026): Creator API
+- Developer Access in Creator Studio: integrations with scopes, live/test environment, token shown once, rotate, revoke, webhook secret, delivery log
+- /api/v1 for sessions, ingest, destinations, recordings and Control Room production; idempotent create/start/stop; per-integration rate limit; audit
+- Signed webhooks with retries; SSRF-safe webhook URLs; reference at /api/docs; guide and examples in docs/CREATOR-API.md
+- Private recordings now need a signed, expiring link (the file URL alone was enough before)
+- Live API test 14/14 against the real media server
+
 ## Backlog (post-MVP priorities)
 - **P1**: Offline downloads for audio and video; HLS transcoding of uploads (Mux/Cloudflare Stream); Apple TV and Roku native apps; email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction

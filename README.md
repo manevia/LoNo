@@ -77,7 +77,7 @@ Installing on phones and TVs needs LoNo on a public **HTTPS** address. See Step 
 
 ## Live broadcasting (creators)
 
-Creators can go live on LoNo from OBS or any RTMP/RTMPS/SRT encoder. They can simulcast to YouTube, Facebook, Twitch, Kick, X, TikTok, LinkedIn, Instagram or any custom server, with a separate status and retry for each destination, and record the broadcast. Off until enabled; see **[docs/BROADCAST.md](docs/BROADCAST.md)**. Creators broadcast from **Creator Studio → Open Live Studio**, using their camera and microphone or an external encoder. Productions with an anchor and field reporters use the **Live Control Room**; see **[docs/CONTROL-ROOM.md](docs/CONTROL-ROOM.md)**.
+Creators can go live on LoNo from OBS or any RTMP/RTMPS/SRT encoder. They can simulcast to YouTube, Facebook, Twitch, Kick, X, TikTok, LinkedIn, Instagram or any custom server, with a separate status and retry for each destination, and record the broadcast. Off until enabled; see **[docs/BROADCAST.md](docs/BROADCAST.md)**. Creators broadcast from **Creator Studio → Open Live Studio**, using their camera and microphone or an external encoder. Productions with an anchor and field reporters use the **Live Control Room**; see **[docs/CONTROL-ROOM.md](docs/CONTROL-ROOM.md)**. Tools and automations connect through the **Creator API**; see **[docs/CREATOR-API.md](docs/CREATOR-API.md)**.
 
 ## Turning features on
 

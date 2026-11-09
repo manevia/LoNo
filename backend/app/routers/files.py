@@ -35,8 +35,17 @@ async def upload(file: UploadFile = File(...), user=Depends(get_user)):
 
 
 @router.get("/files/{path:path}")
-async def download(path: str, request: Request):
+async def download(path: str, request: Request, exp: int | None = None, sig: str | None = None):
     rec = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not rec:
         raise HTTPException(404, "File not found")
+    if path.startswith("recordings/"):
+        # Broadcast recordings stay private until the creator publishes them:
+        # unpublished ones need a short-lived signed link issued to the owner.
+        from ..broadcast.secrets_box import verify
+        import time
+        recording = await db.recordings.find_one({"url": f"/api/files/{path}"}, {"visibility": 1})
+        if not recording or recording.get("visibility") != "public":
+            if not (exp and sig and exp > time.time() and verify(path, sig, str(exp))):
+                raise HTTPException(403, "This recording is private")
     return await storage.serve(path, rec.get("content_type", "application/octet-stream"), request)

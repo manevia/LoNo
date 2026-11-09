@@ -500,9 +500,19 @@ async def _publish_recording(rec: dict):
     await db.recordings.update_one({"id": rec["id"]}, {"$set": {"visibility": "public", "content_id": content["id"], "publish_at": None}})
 
 
+def signed_download(rec: dict, ttl: int = 3600) -> dict:
+    """Add a short-lived download link (private recordings can't be fetched without one)."""
+    if rec.get("url"):
+        path = rec["url"].removeprefix("/api/files/")
+        exp = int(time.time()) + ttl
+        rec = {**rec, "download_url": f"{rec['url']}?exp={exp}&sig={sign(path, str(exp))}"}
+    return rec
+
+
 @router.get("/recordings")
 async def recordings(user=Depends(get_user)):
-    return await db.recordings.find({"owner_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    items = await db.recordings.find({"owner_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return [signed_download(r) for r in items]
 
 
 @router.post("/recordings/{rec_id}/publish")

@@ -6,13 +6,13 @@ Creators send a live feed to LoNo. LoNo can:
 - forward it to their social destinations at the same time,
 - record it.
 
-Status: **phase 2 of 4** (broadcast core, plus Live Studio and Devices & Sources).
+Status: **phases 1 to 3 of 4 done** (broadcast core, Live Studio with Devices & Sources, Creator API). Phase 4 is real-world verification. The Live Control Room is described in [CONTROL-ROOM.md](CONTROL-ROOM.md).
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Ingest (RTMP / RTMPS / SRT), rotatable stream key, private test sessions, go live on LoNo, simulcast with per-destination status and retry, encoder reconnect, recording with an explicit publish choice | **Done (API)** |
 | 2 | **Live Studio** (Creator Studio → Open Live Studio): Devices & Sources, external encoder settings, destinations, private test with preview, Go live, per-destination status and Retry, activity log, End, recordings | **Done** |
-| 3 | Creator API: scoped credentials, signed webhooks, docs and examples, test environment | Planned |
+| 3 | Creator API: scoped credentials, signed webhooks, docs and examples, test environment (see [CREATOR-API.md](CREATOR-API.md)) | **Done** |
 | 4 | End-to-end verification with real encoders (OBS Studio and others) and hardware | Planned |
 
 ## How it works

@@ -36,7 +36,7 @@ export default function RecordingsPanel({ refreshKey }) {
           </div>
           {r.status === "ready" && (
             <div className="flex flex-wrap items-center gap-2">
-              <a href={r.url} className="text-xs rounded-full px-3 py-1.5 bg-white/5 border border-white/10">Download</a>
+              <a href={r.download_url || r.url} className="text-xs rounded-full px-3 py-1.5 bg-white/5 border border-white/10">Download</a>
               {r.visibility !== "public"
                 ? <button onClick={() => act(r, { when: "now" })} data-testid="rec-publish" className="text-xs rounded-full px-3 py-1.5 bg-white text-black font-medium">Publish now</button>
                 : <Link to={`/watch/${r.content_id}`} className="text-xs rounded-full px-3 py-1.5 bg-white/5 border border-white/10">View</Link>}

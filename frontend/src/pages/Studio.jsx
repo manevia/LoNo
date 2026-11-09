@@ -164,6 +164,7 @@ export default function Studio() {
             <p className="text-sm text-gray-400 mt-1">Broadcast from your camera or an encoder (OBS, vMix…) to LoNo and these destinations at once.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+          <Link to="/studio/developers" data-testid="open-developer-access" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-5 py-2.5 text-sm">Developer Access</Link>
           <Link to="/studio/control" data-testid="open-control-room" className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/15 rounded-full px-5 py-2.5 text-sm font-medium">Control Room</Link>
           <Link to="/studio/live" data-testid="open-live-studio" className="inline-flex items-center gap-2 bg-[#FF3B30] hover:bg-[#FF5C53] rounded-full px-5 py-2.5 text-sm font-medium"><Radio className="w-4 h-4" /> Open Live Studio</Link>
           </div>

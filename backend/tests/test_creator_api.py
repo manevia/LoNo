@@ -164,3 +164,28 @@ def test_rooms_via_api(client, media_on):
     assert {"state", "connected", "audio_only", "muted"} <= set(src) and "token_hash" not in src
     _, R = integ(client, u, scopes=["rooms:read"])
     assert client.post(f"/api/v1/rooms/{r['id']}/take", headers=R).status_code == 403
+
+
+def test_private_recordings_need_a_signed_link(client, media_on):
+    import time as _t
+    from app.db import db as _db
+    from app.storage import storage
+    from app.broadcast.secrets_box import sign
+    u = make_user(client)
+    _, H = integ(client, u)
+    path = f"recordings/{u['id']}/s-test.mp4"
+
+    async def setup():
+        await storage.put(path, b"\x00" * 2048, "video/mp4")
+        await _db.files.insert_one({"id": "f1", "user_id": u["id"], "storage_path": path, "content_type": "video/mp4", "size": 2048, "is_deleted": False})
+        await _db.recordings.insert_one({"id": "rec1", "session_id": "s-test", "owner_id": u["id"], "title": "Show", "status": "ready",
+                                         "visibility": "private", "url": f"/api/files/{path}", "duration_sec": 1, "size": 2048, "created_at": "2026-11-09T00:00:00+00:00"})
+    asyncio.run(setup())
+    assert client.get(f"/api/files/{path}").status_code == 403                          # guessing the URL isn't enough
+    rec = client.get("/api/v1/recordings/rec1", headers=H).json()
+    assert client.get(rec["download_url"]).status_code == 200
+    exp = int(_t.time()) + 60
+    assert client.get(f"/api/files/{path}?exp={exp}&sig=forged").status_code == 403
+    assert client.get(f"/api/files/{path}?exp={int(_t.time()) - 5}&sig={sign(path, str(int(_t.time()) - 5))}").status_code == 403  # expired
+    client.post("/api/broadcast/recordings/rec1/publish", headers=u["h"], json={"when": "now"})
+    assert client.get(f"/api/files/{path}").status_code == 200                          # published: plays openly

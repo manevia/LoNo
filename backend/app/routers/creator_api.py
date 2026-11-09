@@ -338,7 +338,7 @@ async def recording(rid: str, c: Caller = Depends(need("recordings:read"))):
     r = await db.recordings.find_one({"id": rid, "owner_id": c.user["id"]}, {"_id": 0})
     if not r:
         raise HTTPException(404, "Recording not found")
-    return r
+    return bc.signed_download(r)
 
 
 # ------------------------------------------------------------------ v1: Control Room
