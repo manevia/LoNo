@@ -54,11 +54,16 @@ GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID")
 # Payments
 STRIPE_API_KEY = _env("STRIPE_API_KEY")
 STRIPE_WEBHOOK_SECRET = _env("STRIPE_WEBHOOK_SECRET")
-SIMULATED_TOKEN_PURCHASE = _bool("SIMULATED_TOKEN_PURCHASE", True)
+# Commercial pilot: $LONO is earned only through verified activity, redeemable for
+# offers, and non-transferable. Simulated purchases, signup bonuses, new staking and
+# $LONO creator payouts are off; existing balances and history are untouched.
+PILOT_MODE = _bool("PILOT_MODE", False)
+PILOT_STARTED_AT = _env("PILOT_STARTED_AT")          # ISO time; staking stops accruing here (set at first start if empty)
+SIMULATED_TOKEN_PURCHASE = _bool("SIMULATED_TOKEN_PURCHASE", True) and not PILOT_MODE
 
 # Token economics ($LONO is a simulated internal ledger)
 LONO_PRICE_USD = float(_env("LONO_PRICE_USD", "0.184"))
-SIGNUP_BONUS = float(_env("SIGNUP_BONUS", "100"))
+SIGNUP_BONUS = 0.0 if PILOT_MODE else float(_env("SIGNUP_BONUS", "100"))
 WATCH_REWARD_PER_MIN = float(_env("WATCH_REWARD_PER_MIN", "1"))
 WATCH_REWARD_CAP_PER_TITLE = float(_env("WATCH_REWARD_CAP_PER_TITLE", "10"))
 WATCH_REWARD_DAILY_CAP = float(_env("WATCH_REWARD_DAILY_CAP", "60"))
@@ -104,6 +109,10 @@ RECORDINGS_DIR = _env("RECORDINGS_DIR", str(BACKEND_DIR / "data" / "recordings")
 API_RATE_PER_MINUTE = int(_env("API_RATE_PER_MINUTE", "120"))   # per integration
 WEBHOOK_ALLOW_PRIVATE = _bool("WEBHOOK_ALLOW_PRIVATE", False)    # only for local development/testing
 
+# Replay passes
+REPLAY_TOKEN_TTL_SEC = int(_env("REPLAY_TOKEN_TTL_SEC", "7200"))
+CLAIM_PENDING_TIMEOUT_SEC = int(_env("CLAIM_PENDING_TIMEOUT_SEC", "120"))
+
 # Abuse protection
 LOGIN_MAX_FAILURES = int(_env("LOGIN_MAX_FAILURES", "5"))        # per email+IP
 LOGIN_WINDOW_SEC = int(_env("LOGIN_WINDOW_SEC", "900"))
@@ -111,7 +120,7 @@ SIGNUPS_PER_IP_PER_HOUR = int(_env("SIGNUPS_PER_IP_PER_HOUR", "10"))
 # Creator-published courses: the platform sets the learner reward (creators can't
 # mint their own), and pays the creator a share each time a learner passes.
 CREATOR_COURSE_REWARD = float(_env("CREATOR_COURSE_REWARD", "10"))
-CREATOR_PAYOUT_PER_CERT = float(_env("CREATOR_PAYOUT_PER_CERT", "2"))
+CREATOR_PAYOUT_PER_CERT = 0.0 if PILOT_MODE else float(_env("CREATOR_PAYOUT_PER_CERT", "2"))  # pilot: creators paid in currency
 
 
 def features() -> dict:
@@ -121,6 +130,7 @@ def features() -> dict:
         "payments": bool(STRIPE_API_KEY),
         "google_client_id": GOOGLE_CLIENT_ID or None,
         "simulated_token_purchase": SIMULATED_TOKEN_PURCHASE,
+        "pilot_mode": PILOT_MODE,
         "storage": STORAGE_BACKEND,
         "heartbeat_sec": HEARTBEAT_SEC,
         "lono_price_usd": LONO_PRICE_USD,

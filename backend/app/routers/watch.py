@@ -66,8 +66,10 @@ async def heartbeat(body: BeatIn, user=Depends(get_user)):
     counted = min(max(gap, 0), config.HEARTBEAT_SEC * 1.5) if body.playing else 0.0
     verified = s["verified_sec"] + counted
 
-    # Reward whole verified minutes, within per-title and daily caps.
-    due = int(verified // 60) * config.WATCH_REWARD_PER_MIN
+    # Reward whole verified minutes, within per-title and daily caps. Replays behind a
+    # pass earn nothing (points are spent on them, not farmed from them).
+    content = await db.content.find_one({"id": s["content_id"]}, {"title": 1, "gated": 1})
+    due = 0 if (content or {}).get("gated") else int(verified // 60) * config.WATCH_REWARD_PER_MIN
     due = min(due, config.WATCH_REWARD_CAP_PER_TITLE)
     reward = max(0.0, due - s["rewarded"])
     daily_left = max(0.0, config.WATCH_REWARD_DAILY_CAP - await _earned_today(user["id"]))
@@ -79,8 +81,9 @@ async def heartbeat(body: BeatIn, user=Depends(get_user)):
     await db.users.update_one({"id": user["id"], "watch_history.content_id": s["content_id"]},
                               {"$set": {"watch_history.$.seconds": int(body.position_sec)}})
     if reward > 0:
-        c = await db.content.find_one({"id": s["content_id"]}, {"title": 1})
-        await credit(user["id"], reward, "watch_to_earn", f"Watched: {c['title'] if c else 'a title'}", ref=s["id"])
+        await credit(user["id"], reward, "watch_to_earn", f"Watched: {(content or {}).get('title', 'a title')}", ref=s["id"])
+    from .campaigns import on_verified_watch      # campaign earning rules (e.g. watch the match preview)
+    await on_verified_watch(user["id"], s["content_id"], verified)
     return {"earned_now": reward, "session_earned": round(s["rewarded"] + reward, 4),
             "verified_sec": round(verified), "daily_remaining": round(daily_left - reward, 2),
             "capped": s["rewarded"] + reward >= config.WATCH_REWARD_CAP_PER_TITLE}

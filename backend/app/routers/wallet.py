@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from .. import config
 from ..db import db
+from ..pilot import pilot_started_at
 from ..ledger import credit, debit, log_tx
 from ..security import get_user
 from ..util import now, now_iso, uid
@@ -37,7 +38,10 @@ async def transactions(user=Depends(get_user)):
 
 
 def _accrued(s) -> float:
-    days = max(0.0, (now() - datetime.fromisoformat(s["started_at"])).total_seconds() / 86400)
+    end = now()
+    if config.PILOT_MODE and pilot_started_at():
+        end = min(end, datetime.fromisoformat(pilot_started_at()))   # pilot: no rewards accrue after it starts
+    days = max(0.0, (end - datetime.fromisoformat(s["started_at"])).total_seconds() / 86400)
     days = min(days, s["lock_days"])
     return round(s["amount"] * (s["apy"] / 100) * (days / 365), 4)
 
@@ -85,6 +89,8 @@ async def insights(days: int = 30, user=Depends(get_user)):
 
 @router.post("/wallet/stake")
 async def stake(body: StakeIn, user=Depends(get_user)):
+    if config.PILOT_MODE:
+        raise HTTPException(403, "Staking is paused during the pilot. Existing stakes can still be withdrawn.")
     apy = APY[body.lock_days]
     await debit(user["id"], body.amount, "stake", f"Staked for {body.lock_days} days at {apy}% APY",
                 extra_inc={"wallet.staked": body.amount})

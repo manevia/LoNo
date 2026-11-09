@@ -39,6 +39,8 @@ async def download(path: str, request: Request, exp: int | None = None, sig: str
     rec = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not rec:
         raise HTTPException(404, "File not found")
+    if rec.get("protected"):
+        raise HTTPException(403, "This media is only available with a pass, from My passes.")
     if path.startswith("recordings/"):
         # Broadcast recordings stay private until the creator publishes them:
         # unpublished ones need a short-lived signed link issued to the owner.

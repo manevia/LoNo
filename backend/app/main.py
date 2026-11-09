@@ -8,14 +8,14 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import account, admin, ai, auth, broadcast, creator_api, rooms, content, creator, creator_courses, files, governance, guide, learn, payments, wallet, watch
+from .routers import account, admin, ai, auth, broadcast, campaigns, creator_api, rooms, content, creator, creator_courses, files, governance, guide, learn, payments, wallet, watch
 from .admin_setup import bootstrap_admins
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no per-request lines (and no URLs in logs)
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 
 @asynccontextmanager
@@ -36,8 +36,22 @@ async def lifespan(app: FastAPI):
         await seed_catalogue()
         await seed_courses()
     await bootstrap_admins()
+    from .pilot import init_pilot
+    await init_pilot()
     stop = asyncio.Event()
     tasks = []
+
+    async def repair_loop():          # finish or undo claims interrupted by a crash
+        while not stop.is_set():
+            try:
+                await campaigns.repair_pending()
+            except Exception:
+                logging.getLogger("lono").exception("claim repair failed")
+            try:
+                await asyncio.wait_for(stop.wait(), 60)
+            except asyncio.TimeoutError:
+                pass
+    tasks.append(asyncio.create_task(repair_loop()))
     if config.MEDIA_ENABLED:
         from .broadcast import media
         from .broadcast.relays import manager
@@ -86,6 +100,9 @@ async def public_config():
     return config.features()
 
 
+api.include_router(campaigns.staff)
+api.include_router(campaigns.fans)
+api.include_router(campaigns.replay)
 api.include_router(creator_api.manage)
 api.include_router(creator_api.v1)
 app.include_router(api)

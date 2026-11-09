@@ -65,6 +65,10 @@ async def get_content(content_id: str, user=Depends(get_user_optional)):
     c = await db.content.find_one({"id": content_id}, {"_id": 0, "subtitles_vtt": 0})
     if not c:
         raise HTTPException(404, "This title doesn't exist or was removed")
+    if c.get("gated"):          # replay behind a pass: play it from My passes
+        c.pop("stream_url", None); c.pop("media_prefix", None)
+        offer = await db.campaigns.find_one({"replay_content_id": content_id, "status": {"$in": ["open", "paused", "closed"]}}, {"id": 1})
+        c["offer_id"] = (offer or {}).get("id")
     c["has_subtitles"] = bool(await db.content.count_documents({"id": content_id, "subtitles_vtt": {"$exists": True}}))
     c["channel"] = await db.channels.find_one({"id": c.get("channel_id")}, {"_id": 0}) if c.get("channel_id") else None
     c["similar"] = await db.content.find(

@@ -12,6 +12,9 @@ CHUNK = 1024 * 1024
 
 
 class LocalStorage:
+    async def exists(self, key: str) -> bool:
+        return self._path(key).exists()
+
     name = "local"
 
     def __init__(self, root: Path):
@@ -82,6 +85,13 @@ class LocalStorage:
 
 
 class S3Storage:
+    async def exists(self, key: str) -> bool:
+        try:
+            await asyncio.to_thread(self.s3.head_object, Bucket=self.bucket, Key=key)
+            return True
+        except Exception:
+            return False
+
     name = "s3"
 
     def __init__(self):

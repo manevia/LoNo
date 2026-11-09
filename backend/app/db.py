@@ -43,6 +43,13 @@ async def ensure_indexes():
     await db.contributors.create_index("token_hash", unique=True)
     await db.contributors.create_index([("room_id", 1), ("created_at", 1)])
     await db.room_events.create_index([("room_id", 1), ("at", -1)])
+    await db.campaigns.create_index("id", unique=True)
+    await db.campaigns.create_index([("status", 1), ("closes_at", 1)])
+    await db.campaign_claims.create_index([("campaign_id", 1), ("user_id", 1)], unique=True)   # one pass per fan per campaign
+    await db.campaign_claims.create_index([("status", 1), ("updated_at", 1)])
+    await db.campaign_earnings.create_index([("campaign_id", 1), ("user_id", 1)], unique=True) # earning bonus once
+    await db.partners.create_index("id", unique=True)
+    await db.settings.create_index("id", unique=True)
     await db.integrations.create_index("id", unique=True)
     await db.integrations.create_index("owner_id")
     await db.webhook_deliveries.create_index([("integration_id", 1), ("created_at", -1)])
