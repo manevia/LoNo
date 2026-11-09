@@ -37,7 +37,7 @@ export default function HeroBanner({ item }) {
           </Link>
           <div className="ml-2 flex items-center gap-2 text-xs text-gray-400">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#34C759]" />
-            Earn +2 $LONO watching
+            Earn 1 $LONO per minute you watch, up to 10
           </div>
         </div>
       </div>
