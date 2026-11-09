@@ -67,14 +67,63 @@ def _ingest_view(ing: dict) -> dict:
     }
 
 
-def _internal_src(ingest_id: str) -> str:
-    return f"{config.MEDIA_RTMP_INTERNAL}/live/{ingest_id}?user={INTERNAL_USER}&pass={config.MEDIA_INTERNAL_SECRET}"
+def _internal_src(ingest_id: str, path: str | None = None) -> str:
+    return f"{config.MEDIA_RTMP_INTERNAL}/{path or 'live/' + ingest_id}?user={INTERNAL_USER}&pass={config.MEDIA_INTERNAL_SECRET}"
 
 
-def _relay_args(src: str, dest: str) -> list[str]:
+def needs_transcode(tracks: list[str] | None) -> bool:
+    """Browser feeds (VP8/VP9 video, Opus audio) can't go over RTMP or (VP8) into HLS."""
+    t = [x.lower() for x in (tracks or [])]
+    return any(x in ("vp8", "vp9", "av1", "h265", "opus", "g711", "lpcm") for x in t)
+
+
+def _transcode_args(ingest_id: str) -> list[str]:
+    auth = f"{INTERNAL_USER}:{config.MEDIA_INTERNAL_SECRET}@"
+    base = config.MEDIA_RTSP_INTERNAL.replace("rtsp://", "rtsp://" + auth)
+    return ["-hide_banner", "-nostats", "-loglevel", "warning", "-progress", "pipe:1", "-rtsp_transport", "tcp",
+            "-i", f"{base}/live/{ingest_id}",
+            "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", "60", "-b:v", "2500k", "-maxrate", "3000k",
+            "-bufsize", "5000k", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
+            "-f", "rtsp", "-rtsp_transport", "tcp", f"{base}/tx/{ingest_id}"]
+
+
+async def ensure_media_path(s: dict) -> str:
+    """Pick the stream everything reads: the creator's feed as-is (H.264/AAC from
+    encoders), or a single converted copy for browser feeds."""
+    feed = await media.path_info(f"live/{s['ingest_id']}") or {}
+    if not feed.get("ready"):
+        return s.get("media_path") or f"live/{s['ingest_id']}"
+    if not needs_transcode(feed.get("tracks")):
+        path = f"live/{s['ingest_id']}"
+    else:
+        path = f"tx/{s['ingest_id']}"
+        await manager.start(s["id"], "transcode", _transcode_args(s["ingest_id"]))
+        for _ in range(30):                      # wait until the converted stream exists
+            info = await media.path_info(path)
+            if info and info.get("ready"):
+                break
+            await asyncio.sleep(0.5)
+    if s.get("media_path") != path:
+        await db.broadcast_sessions.update_one({"id": s["id"]}, {"$set": {"media_path": path}})
+        s["media_path"] = path
+    return path
+
+
+def _codec_args(tracks: list[str] | None) -> list[str]:
+    """Copy H.264/AAC (encoders like OBS). Browser sources send Opus audio and
+    sometimes VP8/VP9 video, which RTMP platforms don't accept: convert those."""
+    t = [x.lower() for x in (tracks or [])]
+    video_ok = not any(x in ("vp8", "vp9", "av1", "h265") for x in t)
+    audio_ok = not any(x in ("opus", "g711", "lpcm") for x in t)
+    v = ["-c:v", "copy"] if video_ok else ["-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", "60", "-b:v", "2500k", "-pix_fmt", "yuv420p"]
+    a = ["-c:a", "copy"] if audio_ok else ["-c:a", "aac", "-b:a", "128k", "-ar", "48000"]
+    return v + a
+
+
+def _relay_args(src: str, dest: str, tracks: list[str] | None = None) -> list[str]:
     fmt = "mpegts" if dest.startswith("srt://") else "flv"
     return ["-hide_banner", "-nostats", "-loglevel", "warning", "-progress", "pipe:1", "-rw_timeout", "15000000",
-            "-i", src, "-c", "copy", "-f", fmt, dest]
+            "-i", src, *_codec_args(tracks), "-f", fmt, dest]
 
 
 def _recorder_args(src: str, out: str) -> list[str]:
@@ -108,7 +157,7 @@ async def _session_view(s: dict) -> dict:
     token = f"{s['id']}.{sign(s['id'] + s['ingest_id'])}"
     return {
         **{k: v for k, v in s.items() if k not in ("idempotency_key",)},
-        "feed": feed or {"ready": False},
+        "feed": {**(feed or {"ready": False}), "converted": (s.get("media_path") or "").startswith("tx/")},
         "destinations": dests,
         "recorder": relays.get("recorder"),
         "preview_url": f"/media/hls/t/{token}/{s['ingest_id']}/index.m3u8",
@@ -118,13 +167,16 @@ async def _session_view(s: dict) -> dict:
 
 
 async def _start_targets(s: dict):
-    src = _internal_src(s["ingest_id"])
+    path = await ensure_media_path(s)
+    src = _internal_src(s["ingest_id"], path)
+    feed = await media.path_info(path) or {}
+    tracks = feed.get("tracks")
     for d in s.get("destinations", []):
         dest = await db.destinations.find_one({"id": d["id"], "owner_id": s["owner_id"]})
         if not dest or not BY_ID.get(dest["platform"], {}).get("supported"):
             continue
         key = decrypt(dest["key_enc"])
-        await manager.start(s["id"], f"dest:{d['id']}", _relay_args(src, target_url(dest["server_url"], key)), (key,))
+        await manager.start(s["id"], f"dest:{d['id']}", _relay_args(src, target_url(dest["server_url"], key), tracks), (key,))
     if s.get("record"):
         folder = Path(config.RECORDINGS_DIR) / s["id"]
         folder.mkdir(parents=True, exist_ok=True)
@@ -242,6 +294,8 @@ async def create_session_for(user, body: SessionIn, idempotency_key: str | None 
          "idempotency_key": idempotency_key}
     await db.broadcast_sessions.insert_one(dict(s))
     await audit("broadcast_session_created", user, target=s["id"], details={"test": body.test, "destinations": len(dests)})
+    if config.MEDIA_ENABLED:
+        asyncio.create_task(ensure_media_path(dict(s)))
     return s
 
 
@@ -279,6 +333,7 @@ async def start_session_for(user, session_id: str) -> dict:
     feed = await media.path_info(f"live/{s['ingest_id']}")
     if not feed or not feed["ready"]:
         raise HTTPException(409, "No feed from your encoder or camera yet. Start sending, check the preview, then go live.")
+    await ensure_media_path(s)
     ch = await _channel_for(user)
     content = {"id": uid(), "title": s["title"], "description": s["description"] or "Live on LoNo", "kind": s["kind"],
                "category": s["category"], "thumbnail_url": ch.get("avatar_url") or "/icons/icon-512.png",
@@ -332,7 +387,9 @@ async def retry_destination(session_id: str, dest_id: str, user=Depends(get_user
         raise HTTPException(404, "That destination was removed")
     key = decrypt(dest["key_enc"])
     await manager.stop(s["id"], f"dest:{dest_id}")
-    await manager.start(s["id"], f"dest:{dest_id}", _relay_args(_internal_src(s["ingest_id"]), target_url(dest["server_url"], key)), (key,))
+    path = s.get("media_path") or f"live/{s['ingest_id']}"
+    feed = await media.path_info(path) or {}
+    await manager.start(s["id"], f"dest:{dest_id}", _relay_args(_internal_src(s["ingest_id"], path), target_url(dest["server_url"], key), feed.get("tracks")), (key,))
     return await _session_view(s)
 
 
@@ -340,6 +397,49 @@ async def retry_destination(session_id: str, dest_id: str, user=Depends(get_user
 async def session_events(session_id: str, user=Depends(get_user)):
     await _session(session_id, user)
     return await db.broadcast_events.find({"session_id": session_id}, {"_id": 0}).sort("at", 1).to_list(500)
+
+
+# ---------------------------------------------------------------- browser camera (WHIP)
+_whip_resources: dict[str, str] = {}   # user id -> MediaMTX WHIP resource URL
+
+
+@router.post("/whip")
+async def whip_publish(request: Request, user=Depends(get_user)):
+    """Creator Studio sends its WebRTC offer here; LoNo forwards it to the media
+    server with the creator's stream key, so the key never reaches the browser."""
+    _require_media()
+    s = await db.broadcast_sessions.find_one({"owner_id": user["id"], "status": {"$in": list(ACTIVE)}}, {"_id": 0})
+    if not s:
+        raise HTTPException(409, "Create a test or live session first")
+    ing = await db.ingests.find_one({"id": s["ingest_id"]})
+    offer = (await request.body()).decode(errors="ignore")
+    if not offer.startswith("v=0"):
+        raise HTTPException(422, "Expected an SDP offer")
+    url = f"{config.MEDIA_WEBRTC_URL}/live/{ing['id']}/whip"
+    try:
+        async with httpx.AsyncClient(timeout=15, auth=(ing["id"], decrypt(ing["key_enc"]))) as hc:
+            r = await hc.post(url, content=offer, headers={"Content-Type": "application/sdp"})
+    except httpx.HTTPError:
+        raise HTTPException(502, "The media server isn't responding")
+    if r.status_code not in (200, 201):
+        raise HTTPException(502, f"The media server refused the camera stream ({r.status_code})")
+    loc = r.headers.get("location")
+    if loc:
+        _whip_resources[user["id"]] = loc if loc.startswith("http") else config.MEDIA_WEBRTC_URL + loc
+    return Response(r.text, status_code=201, media_type="application/sdp")
+
+
+@router.delete("/whip")
+async def whip_stop(user=Depends(get_user)):
+    loc = _whip_resources.pop(user["id"], None)
+    if loc:
+        ing = await db.ingests.find_one({"owner_id": user["id"]})
+        try:
+            async with httpx.AsyncClient(timeout=5, auth=(ing["id"], decrypt(ing["key_enc"]))) as hc:
+                await hc.delete(loc)
+        except httpx.HTTPError:
+            pass
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------- recordings
@@ -475,6 +575,8 @@ async def on_feed_change(path: str, ready: bool):
     if not s:
         return
     await _event(s, "stream.connected" if ready else "stream.disconnected")
+    if ready and s["status"] != "live":
+        await ensure_media_path(s)       # private test preview (converts browser codecs if needed)
     if s["status"] == "live":
         if ready:
             await _start_targets(s)      # restart destinations and start a new recording part
@@ -512,7 +614,7 @@ async def hls_proxy(rest: str):
         raise HTTPException(404, "This stream isn't live")
     if not re.fullmatch(r"[\w.\-/]+", file) or ".." in file:
         raise HTTPException(400)
-    url = f"{config.MEDIA_HLS_URL}/live/{ingest_id}/{file}"
+    url = f"{config.MEDIA_HLS_URL}/{s.get('media_path') or 'live/' + ingest_id}/{file}"
     client = httpx.AsyncClient(timeout=20, auth=(INTERNAL_USER, config.MEDIA_INTERNAL_SECRET))
     try:
         req = client.build_request("GET", url)

@@ -16,6 +16,7 @@ services:
       MTX_AUTHHTTPADDRESS: http://backend:8001/api/broadcast/mtx/auth
       MTX_APIADDRESS: ":9997"
       MTX_HLSADDRESS: ":8888"
+      MTX_RTSPADDRESS: ":8554"     # internal only (not published)
     ports:
       - "1935:1935"         # RTMP ingest
       - "1936:1936"         # RTMPS ingest (needs certs in media/certs)
@@ -37,6 +38,7 @@ services:
       MEDIA_HLS_URL: http://media:8888
       MEDIA_WEBRTC_URL: http://media:8889
       MEDIA_RTMP_INTERNAL: rtmp://media:1935
+      MEDIA_RTSP_INTERNAL: rtsp://media:8554
       RECORDINGS_DIR: /app/data/recordings
     volumes: [uploads:/app/data/uploads]
     depends_on: [mongo, media]

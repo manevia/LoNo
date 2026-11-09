@@ -80,7 +80,7 @@ def test_session_lifecycle(client, media_on):
     targets = {t for _, t, _ in media_on["started"]}
     assert targets == {f"dest:{yt['id']}", "recorder"}
     dest_args = next(a for _, t, a in media_on["started"] if t.startswith("dest:"))
-    assert dest_args[-1] == "rtmp://a.rtmp.youtube.com/live2/yt-key-1234" and "-c" in dest_args  # passthrough, no re-encode
+    assert dest_args[-1] == "rtmp://a.rtmp.youtube.com/live2/yt-key-1234" and dest_args[dest_args.index("-c:v") + 1] == "copy"  # H.264/AAC passthrough
     assert any(c["id"] == live["content_id"] for c in client.get("/api/live/guide").json()["tv"])
     other = make_user(client)
     assert client.post(f"/api/broadcast/sessions/{s['id']}/stop", headers=other["h"]).status_code == 404
@@ -103,3 +103,17 @@ def test_test_session_is_private(client, media_on):
 
 def test_redaction():
     assert redact("rtmp://x/app/sk-123456 failed", "sk-123456") == "rtmp://x/app/•••• failed"
+
+
+def test_codec_args_copy_or_convert():
+    assert bc._codec_args(["H264", "MPEG-4 Audio"]) == ["-c:v", "copy", "-c:a", "copy"]
+    browser = bc._codec_args(["VP8", "Opus"])
+    assert "libx264" in browser and "aac" in browser
+    h264_opus = bc._codec_args(["H264", "Opus"])
+    assert h264_opus[:2] == ["-c:v", "copy"] and "aac" in h264_opus
+
+
+def test_whip_needs_a_session(client, media_on):
+    u = make_user(client)
+    r = client.post("/api/broadcast/whip", headers={**u["h"], "Content-Type": "application/sdp"}, content=b"v=0\r\n")
+    assert r.status_code == 409

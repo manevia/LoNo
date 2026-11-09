@@ -43,11 +43,18 @@ hlsSegmentCount: 60
 hlsSegmentDuration: 2s
 hlsAlwaysRemux: yes
 
-rtsp: no
+# Internal RTSP (localhost / internal network only): LoNo reads browser feeds
+# (VP8/Opus) over RTSP to convert them to H.264/AAC once, into tx/<ingest>.
+rtsp: yes
+protocols: [tcp]
+encryption: "no"
+rtspAddress: 127.0.0.1:8554
 
 pathDefaults:
   record: no
 
 paths:
   "~^live/in[0-9a-f]{10}$":
+    source: publisher
+  "~^tx/in[0-9a-f]{10}$":
     source: publisher

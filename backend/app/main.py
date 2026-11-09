@@ -15,7 +15,7 @@ from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no per-request lines (and no URLs in logs)
-VERSION = "2.8.0"
+VERSION = "2.9.0"
 
 
 @asynccontextmanager
@@ -110,7 +110,8 @@ async def security_headers(request, call_next):
     h.setdefault("X-Content-Type-Options", "nosniff")          # no MIME sniffing of uploads
     h.setdefault("X-Frame-Options", "DENY")                    # no clickjacking via iframes
     h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(self)")
+    # Camera/mic/screen only for LoNo itself (Live Studio); never for embedded third parties.
+    h.setdefault("Permissions-Policy", "camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(self)")
     if request.url.path.startswith("/api/") and "cache-control" not in h:
         h["Cache-Control"] = "no-store"                        # API answers can be personal
     return resp

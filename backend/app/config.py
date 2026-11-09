@@ -82,6 +82,7 @@ MEDIA_API_URL = _env("MEDIA_API_URL", "http://127.0.0.1:9997").rstrip("/")     #
 MEDIA_HLS_URL = _env("MEDIA_HLS_URL", "http://127.0.0.1:8888").rstrip("/")     # MediaMTX HLS (proxied at /media/hls)
 MEDIA_WEBRTC_URL = _env("MEDIA_WEBRTC_URL", "http://127.0.0.1:8889").rstrip("/")  # WHIP for browser cameras
 MEDIA_RTMP_INTERNAL = _env("MEDIA_RTMP_INTERNAL", "rtmp://127.0.0.1:1935").rstrip("/")
+MEDIA_RTSP_INTERNAL = _env("MEDIA_RTSP_INTERNAL", "rtsp://127.0.0.1:8554").rstrip("/")
 INGEST_RTMP_URL = _env("INGEST_RTMP_URL", "rtmp://localhost:1935/live")          # what creators paste into OBS
 INGEST_RTMPS_URL = _env("INGEST_RTMPS_URL", "")                                  # e.g. rtmps://live.example.org:1936/live
 INGEST_SRT_URL = _env("INGEST_SRT_URL", "srt://localhost:8890")

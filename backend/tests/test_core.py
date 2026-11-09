@@ -77,3 +77,8 @@ def test_assetlinks(client, monkeypatch):
     monkeypatch.setattr(config, "ANDROID_CERT_SHA256", ["AA:BB"])
     d = client.get("/.well-known/assetlinks.json").json()
     assert d[0]["target"]["package_name"] == "lr.edu.ciu.lono" and d[0]["target"]["sha256_cert_fingerprints"] == ["AA:BB"]
+
+
+def test_permissions_policy_allows_studio_devices(client):
+    pp = client.get("/api/health").headers["permissions-policy"]
+    assert "camera=(self)" in pp and "microphone=(self)" in pp and "geolocation=()" in pp
