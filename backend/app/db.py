@@ -6,7 +6,7 @@ if config.MONGO_URL.startswith("mongomock://"):
     client = _Client()
 else:
     from motor.motor_asyncio import AsyncIOMotorClient as _Client
-    client = _Client(config.MONGO_URL)
+    client = _Client(config.MONGO_URL, serverSelectionTimeoutMS=5000)  # fail in 5s, not 30s
 
 db = client[config.DB_NAME]
 

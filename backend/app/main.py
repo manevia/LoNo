@@ -19,7 +19,17 @@ VERSION = "2.5.0"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config.warn_on_insecure_defaults()
-    await ensure_indexes()
+    try:
+        await ensure_indexes()
+    except Exception as e:  # pymongo.errors.ServerSelectionTimeoutError and friends
+        if type(e).__name__ not in ("ServerSelectionTimeoutError", "ConnectionFailure", "AutoReconnect"):
+            raise
+        logging.getLogger("lono").error(
+            "\n\n  Can't reach the database at MONGO_URL=%s\n"
+            "  - To try LoNo without installing MongoDB, set MONGO_URL=mongomock:// in backend/.env\n"
+            "    (or delete backend/.env and run start.cmd / start.sh to recreate it).\n"
+            "  - To keep data, start MongoDB (or use Docker mode: start.cmd -Docker).\n", config.MONGO_URL)
+        raise SystemExit(1) from None
     if config.SEED_DEMO_DATA:
         await seed_catalogue()
         await seed_courses()

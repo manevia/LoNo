@@ -67,18 +67,27 @@ if (-not (Test-Path $stamp) -or (Get-Content $stamp) -ne $hash) {
   Set-Content $stamp $hash
 }
 
-# 3. Settings file for local use (in-memory database, random secret)
+# 3. Settings file for local use (in-memory database, random secret).
+#    Fills in any essential setting that's missing, without touching ones you've set.
 $envFile = Join-Path $Backend ".env"
-if (-not (Test-Path $envFile)) {
-  @(
-    "# Local settings. See .env.example for every option.",
-    "# mongomock:// = in-memory database that resets on restart. Use mongodb://localhost:27017 to keep data.",
-    "MONGO_URL=mongomock://", "DB_NAME=lono", "JWT_SECRET=$(NewSecret)", "CORS_ORIGINS=*",
-    "PUBLIC_ORIGIN=http://localhost:$Port", "STORAGE_BACKEND=local", "ANTHROPIC_API_KEY=",
-    "TRANSCRIBE_API_KEY=", "GOOGLE_CLIENT_ID=", "STRIPE_API_KEY=",
-    "ADMIN_EMAILS=msf@ciu.edu.lr", "SUPPORT_EMAIL=lono@ciu.edu.lr"
-  ) | Set-Content $envFile
-  Say "Created backend\.env (in-memory database)."
+$defaults = [ordered]@{
+  "MONGO_URL" = "mongomock://"; "DB_NAME" = "lono"; "JWT_SECRET" = (NewSecret); "CORS_ORIGINS" = "*"
+  "PUBLIC_ORIGIN" = "http://localhost:$Port"; "STORAGE_BACKEND" = "local"
+  "ADMIN_EMAILS" = "msf@ciu.edu.lr"; "SUPPORT_EMAIL" = "lono@ciu.edu.lr"
+}
+$existing = @()
+if (Test-Path $envFile) { $existing = @(Get-Content $envFile) }
+$missing = @($defaults.Keys | Where-Object { $k = $_; -not ($existing | Where-Object { $_ -match "^\s*$k\s*=" }) })
+if ($missing.Count -gt 0) {
+  $lines = @()
+  if ($existing.Count -eq 0) {
+    $lines += "# Local settings. See .env.example for every option."
+    $lines += "# mongomock:// = in-memory database that resets on restart. Use mongodb://localhost:27017 to keep data."
+  }
+  foreach ($k in $missing) { $lines += "$k=$($defaults[$k])" }
+  Add-Content -Path $envFile -Value $lines
+  if ($existing.Count -eq 0) { Say "Created backend\.env (in-memory database)." }
+  else { Say "Added missing settings to backend\.env: $($missing -join ', ')" }
 }
 
 # 4. Website build (needs Node.js once if it isn't already built)

@@ -30,20 +30,18 @@ if [[ "$(cat "$BACKEND/.venv/.requirements.sha" 2>/dev/null)" != "$HASH" ]]; the
   "$BACKEND/.venv/bin/python" -m pip install --disable-pip-version-check -q -r "$BACKEND/requirements.txt"
   echo "$HASH" > "$BACKEND/.venv/.requirements.sha"
 fi
-if [[ ! -f "$BACKEND/.env" ]]; then
-  cat > "$BACKEND/.env" <<ENV
-# Local settings. See .env.example for every option.
-MONGO_URL=mongomock://
-DB_NAME=lono
-JWT_SECRET=$(secret)
-CORS_ORIGINS=*
-PUBLIC_ORIGIN=http://localhost:$PORT
-STORAGE_BACKEND=local
-ADMIN_EMAILS=msf@ciu.edu.lr
-SUPPORT_EMAIL=lono@ciu.edu.lr
-ENV
-  say "Created backend/.env (in-memory database)."
-fi
+# Settings for local use: fill in any essential setting that's missing, keep the rest.
+ENVF="$BACKEND/.env"
+[[ -f "$ENVF" ]] || { printf '# Local settings. See .env.example for every option.\n' > "$ENVF"; NEW=1; }
+added=()
+for kv in "MONGO_URL=mongomock://" "DB_NAME=lono" "JWT_SECRET=$(secret)" "CORS_ORIGINS=*" \
+          "PUBLIC_ORIGIN=http://localhost:$PORT" "STORAGE_BACKEND=local" \
+          "ADMIN_EMAILS=msf@ciu.edu.lr" "SUPPORT_EMAIL=lono@ciu.edu.lr"; do
+  key="${kv%%=*}"
+  grep -qE "^[[:space:]]*$key[[:space:]]*=" "$ENVF" || { [[ -s "$ENVF" && $(tail -c1 "$ENVF" | wc -l) -eq 0 ]] && echo >> "$ENVF"; echo "$kv" >> "$ENVF"; added+=("$key"); }
+done
+if [[ -n "${NEW:-}" ]]; then say "Created backend/.env (in-memory database)."
+elif (( ${#added[@]} )); then say "Added missing settings to backend/.env: ${added[*]}"; fi
 if [[ ! -f "$FRONTEND/build/index.html" ]]; then
   command -v node >/dev/null || fail "Install Node.js 20 to build the website once, then run this again."
   say "Building the website (first run only)..."
