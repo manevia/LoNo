@@ -12,6 +12,8 @@ CHUNK = 1024 * 1024
 
 
 class LocalStorage:
+    direct_uploads = False
+
     async def exists(self, key: str) -> bool:
         return self._path(key).exists()
 
@@ -53,7 +55,7 @@ class LocalStorage:
             raise HTTPException(404, "File not found in storage")
         return await asyncio.to_thread(p.read_bytes)
 
-    async def serve(self, key: str, content_type: str, request: Request) -> Response:
+    async def serve(self, key: str, content_type: str, request: Request, ttl: int = 0) -> Response:
         """Stream with HTTP Range support so video seeking works."""
         p = self._path(key)
         if not p.exists():
@@ -108,7 +110,11 @@ class S3Storage:
     def __init__(self):
         import boto3
         self.bucket = config.S3_BUCKET
-        self.s3 = boto3.client("s3", region_name=config.S3_REGION, endpoint_url=config.S3_ENDPOINT_URL)
+        from botocore.config import Config
+        # Signature v4 with virtual-host or path style as the endpoint needs; works with AWS S3,
+        # Cloudflare R2 (region "auto"), MinIO and DigitalOcean Spaces.
+        self.s3 = boto3.client("s3", region_name=config.S3_REGION, endpoint_url=config.S3_ENDPOINT_URL,
+                               config=Config(signature_version="s3v4", s3={"addressing_style": "path" if config.S3_ENDPOINT_URL else "auto"}))
 
     async def put(self, key: str, data: bytes, content_type: str):
         await asyncio.to_thread(self.s3.put_object, Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
@@ -129,11 +135,27 @@ class S3Storage:
         obj = await asyncio.to_thread(self.s3.get_object, Bucket=self.bucket, Key=key)
         return await asyncio.to_thread(obj["Body"].read)
 
-    async def serve(self, key: str, content_type: str, request: Request) -> Response:
+    async def serve(self, key: str, content_type: str, request: Request, ttl: int = 3600) -> Response:
+        """Hand the client a short-lived signed link (the bytes come from storage, not this server)."""
         url = await asyncio.to_thread(
             self.s3.generate_presigned_url, "get_object",
-            Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=3600)
-        return RedirectResponse(url, status_code=307)
+            Params={"Bucket": self.bucket, "Key": key, "ResponseContentType": content_type}, ExpiresIn=ttl)
+        return RedirectResponse(url, status_code=307, headers={"Cache-Control": "private, no-store"})
+
+    direct_uploads = True
+
+    async def presign_put(self, key: str, content_type: str, ttl: int = 3600) -> str:
+        """A signed URL the browser can PUT the file to directly (no size limits from proxies)."""
+        return await asyncio.to_thread(
+            self.s3.generate_presigned_url, "put_object",
+            Params={"Bucket": self.bucket, "Key": key, "ContentType": content_type}, ExpiresIn=ttl)
+
+    async def size(self, key: str) -> int | None:
+        try:
+            head = await asyncio.to_thread(self.s3.head_object, Bucket=self.bucket, Key=key)
+            return int(head["ContentLength"])
+        except Exception:
+            return None
 
 
 def _make():

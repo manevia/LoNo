@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { uploadFile } from "@/lib/upload";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowUp, ArrowDown, Trash2, Plus, Loader2, Upload, CheckCircle2, AlertCircle, ExternalLink, X, Sparkles } from "lucide-react";
@@ -24,10 +25,7 @@ const toServer = (d) => ({
 const move = (arr, i, dir) => { const a = [...arr]; [a[i], a[i + dir]] = [a[i + dir], a[i]]; return a; };
 
 async function upload(file) {
-  const fd = new FormData();
-  fd.append("file", file);
-  const { data } = await api.post("/storage/upload", fd);
-  return data.url;
+  return (await uploadFile(file)).url;
 }
 
 function UploadButton({ accept, label, onDone }) {

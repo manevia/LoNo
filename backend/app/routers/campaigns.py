@@ -626,7 +626,8 @@ async def replay_media(token: str, path: str, request: Request):
     f = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not f:
         raise HTTPException(404, "Not found")
-    resp = await storage.serve(path, f.get("content_type", "application/octet-stream"), request)
+    # Object storage: a 2-minute signed link (the pass is re-checked on every request here).
+    resp = await storage.serve(path, f.get("content_type", "application/octet-stream"), request, ttl=120)
     resp.headers["Cache-Control"] = "private, no-store"
     return resp
 

@@ -15,7 +15,7 @@ from .util import now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no per-request lines (and no URLs in logs)
-VERSION = "3.2.0"
+VERSION = "3.3.0"
 
 
 @asynccontextmanager

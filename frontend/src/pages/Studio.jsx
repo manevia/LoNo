@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import { uploadFile, uploadError } from "@/lib/upload";
 import StudioCourses from "@/components/StudioCourses";
 
 const Stat = ({ icon: Icon, label, value, hint, color = "text-white" }) => (
@@ -38,22 +39,14 @@ export default function Studio() {
   const thumbRef = useRef(null);
 
   const uploadTo = async (file, kind) => {
-    const fd = new FormData();
-    fd.append("file", file);
     setUploading((u) => ({ ...u, [kind]: 1 }));
     try {
-      const { data } = await api.post("/storage/upload", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (e) => {
-          const pct = e.total ? Math.round((e.loaded / e.total) * 100) : 0;
-          setUploading((u) => ({ ...u, [kind]: Math.max(1, pct) }));
-        },
-      });
+      const data = await uploadFile(file, { onProgress: (pct) => setUploading((u) => ({ ...u, [kind]: Math.max(1, pct) })) });
       if (kind === "media") setForm((f) => ({ ...f, stream_url: data.url }));
       else setForm((f) => ({ ...f, thumbnail_url: data.url }));
       toast.success(`${kind === "media" ? "Media" : "Thumbnail"} uploaded`);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Upload failed");
+      toast.error(uploadError(err));
     } finally {
       setUploading((u) => ({ ...u, [kind]: 0 }));
     }
