@@ -138,6 +138,13 @@ Build LoNo, the world's first unified hybrid media, broadcasting, streaming, lea
 - Behind proxies: the API sees https and each visitor's real address (per-address limits work); forged forwarding headers discarded
 - Admin request-info check for deployments
 
+## v3.3 (Nov 2026): Cloudflare hosting, stage 1
+- cloudflare/: one Worker serves the website (static assets, cache rules) and routes /api to a single always-on Container running the API; CF-Connecting-IP becomes the forwarded address
+- Object storage on R2: browser uploads go straight to R2 via signed URLs (no 100 MB proxy limit), confirmed by size; R2-compatible S3 signing; protected media served as 2-minute (replays) / 5-minute (recordings) signed links
+- GitHub Actions "Deploy to Cloudflare": checks secrets, builds, creates the R2 bucket and CORS, generates internal secrets once, deploys, waits for health
+- MongoDB Atlas support (dnspython); docs/CLOUDFLARE.md
+- Live broadcasting and Control Room off in this stage (stage 2: Cloudflare Stream; stage 3: Realtime)
+
 ## Backlog (post-MVP priorities)
 - **P1**: Offline downloads for audio and video; HLS transcoding of uploads (Mux/Cloudflare Stream); Apple TV and Roku native apps; email verification and password reset by email (needs an email provider); KYC/AML provider integration (the admin console and audit log are ready for it); notifications; on-chain anchoring for certificates; Simulcast RTMP orchestration; Watch parties & multi-profile
 - **P1**: Compliance dashboard (FCC/DMCA/KYC/AML/GDPR) — configurable modules per jurisdiction

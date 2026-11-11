@@ -1,5 +1,7 @@
 # Putting LoNo on https://lono.ciu.edu.lr
 
+> **Using Cloudflare instead of a server?** See [CLOUDFLARE.md](CLOUDFLARE.md). This guide is for running everything, including live broadcasting, on your own Ubuntu server.
+
 Everything runs in Docker on one Linux server:
 - **Caddy:** HTTPS, with automatic Let's Encrypt certificates and renewal.
 - **The website and API.**

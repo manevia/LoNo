@@ -1,0 +1,49 @@
+// LoNo on Cloudflare (docs/CLOUDFLARE.md). Deployed by .github/workflows/deploy-cloudflare.yml.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lono",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-20",
+  "observability": { "enabled": true },
+
+  // The website: the React build, served by Cloudflare. API paths go to the Worker first.
+  "assets": {
+    "directory": "../frontend/build",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/.well-known/*"]
+  },
+
+  // The API: LoNo's Python backend as one always-on Container.
+  "containers": [
+    {
+      "class_name": "LonoApi",
+      "image": "../backend/Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": { "bindings": [{ "class_name": "LonoApi", "name": "LONO_API" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LonoApi"] }],
+
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  // The address. Cloudflare creates the DNS record for this custom domain.
+  "routes": [{ "pattern": "lono.ciu.edu.lr", "custom_domain": true }],
+
+  // Plain settings (secrets are set separately and never stored here).
+  "vars": {
+    "DB_NAME": "lono",
+    "STORAGE_BACKEND": "s3",
+    "S3_BUCKET": "lono-media",
+    "S3_REGION": "auto",
+    "ADMIN_EMAILS": "msf@ciu.edu.lr",
+    "SUPPORT_EMAIL": "lono@ciu.edu.lr",
+    "PUBLIC_ORIGIN": "https://lono.ciu.edu.lr",
+    "CORS_ORIGINS": "https://lono.ciu.edu.lr",
+    "PILOT_MODE": "true",
+    "SEED_DEMO_DATA": "false",
+    "MAX_UPLOAD_MB": "4096",
+    "MEDIA_ENABLED": "false"
+  }
+}

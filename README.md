@@ -77,7 +77,9 @@ Installing on phones and TVs needs LoNo on a public **HTTPS** address. See Step 
 
 ## Production: https://lono.ciu.edu.lr
 
-`deploy/` holds the production stack: Caddy (automatic HTTPS), the website, API, MongoDB and the media server. With an Ubuntu server and a DNS record in place, it installs with `sudo ./deploy/setup.sh`. See **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+**On Cloudflare (no server):** the website and API run on Cloudflare (Workers and Containers), videos are stored in R2, and the database is MongoDB Atlas. It's deployed from GitHub Actions; see **[docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)**. In this setup live broadcasting is off for now.
+
+**On your own server:** `deploy/` holds the production stack: Caddy (automatic HTTPS), the website, API, MongoDB and the media server. With an Ubuntu server and a DNS record in place, it installs with `sudo ./deploy/setup.sh`. See **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
 ## Live broadcasting (creators)
 
