@@ -1,0 +1,84 @@
+name: Deploy to Cloudflare
+
+# Run from GitHub: Actions → "Deploy to Cloudflare" → Run workflow.
+# Needs the repository secrets listed in docs/CLOUDFLARE.md.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cloudflare
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        env:
+          MONGO_URL: ${{ secrets.MONGO_URL }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          missing=""
+          for s in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID MONGO_URL R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            [ -n "${!s}" ] || missing="$missing $s"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Add these repository secrets (Settings → Secrets and variables → Actions):$missing"
+            exit 1
+          fi
+          case "$MONGO_URL" in mongodb+srv://*|mongodb://*) ;; *) echo "::error::MONGO_URL must start with mongodb+srv:// (from MongoDB Atlas → Connect → Drivers)"; exit 1 ;; esac
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build the website
+        working-directory: frontend
+        run: |
+          yarn install --frozen-lockfile
+          CI=true yarn build
+
+      - name: Install deploy tools
+        working-directory: cloudflare
+        run: npm ci --no-audit --no-fund
+
+      - name: Storage bucket (Cloudflare R2) and its upload rules
+        working-directory: cloudflare
+        run: |
+          if npx wrangler r2 bucket list | grep -q "lono-media"; then echo "R2 bucket lono-media exists"; else npx wrangler r2 bucket create lono-media; fi
+          npx wrangler r2 bucket cors set lono-media --file r2-cors.json --force
+
+      - name: Deploy website and API
+        working-directory: cloudflare
+        env:
+          MONGO_URL: ${{ secrets.MONGO_URL }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        run: |
+          node prepare-secrets.mjs "$RUNNER_TEMP/secrets.json"
+          npx wrangler deploy \
+            --secrets-file "$RUNNER_TEMP/secrets.json" \
+            --var "S3_ENDPOINT_URL:https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --containers-rollout immediate
+          rm -f "$RUNNER_TEMP/secrets.json"
+
+      - name: Wait for https://lono.ciu.edu.lr
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 10 https://lono.ciu.edu.lr/api/health; then echo; echo "LoNo is live at https://lono.ciu.edu.lr"; exit 0; fi
+            sleep 10
+          done
+          echo "::warning::The API didn't answer within 10 minutes. The first start can take longer while the container image is placed; check Workers & Pages → lono → Logs in the Cloudflare dashboard."
