@@ -1,8 +1,14 @@
 """LoNo — hybrid media, broadcasting, streaming, learning and Web3 platform (API)."""
 import asyncio
 import logging
+import socket
+import ssl
 from contextlib import asynccontextmanager
 
+from urllib.parse import urlsplit
+
+import dns.exception
+import dns.resolver
 from fastapi import APIRouter, FastAPI
 from pymongo.errors import ConfigurationError, ConnectionFailure, OperationFailure
 from starlette.middleware.cors import CORSMiddleware
@@ -19,6 +25,42 @@ logging.getLogger("httpx").setLevel(logging.WARNING)  # no per-request lines (an
 VERSION = "3.3.0"
 
 
+def probe_atlas_connectivity():
+    logger = logging.getLogger("lono")
+    try:
+        uri = urlsplit(config.MONGO_URL)
+        host = uri.hostname
+    except ValueError:
+        logger.error("Atlas probe: invalid connection URI.")
+        return
+    if uri.scheme != "mongodb+srv" or not host or not host.endswith(".mongodb.net"):
+        logger.error("Atlas probe: expected an Atlas SRV hostname.")
+        return
+
+    try:
+        records = dns.resolver.resolve(f"_mongodb._tcp.{host}", "SRV", lifetime=3)
+    except dns.exception.DNSException as error:
+        logger.error("Atlas probe: SRV lookup failed (%s).", type(error).__name__)
+        return
+
+    tls_context = ssl.create_default_context()
+    for index, record in enumerate(list(records)[:3], start=1):
+        target = record.target.to_text(omit_final_dot=True)
+        if not target.lower().endswith(".mongodb.net"):
+            continue
+        try:
+            connection = socket.create_connection((target, record.port), timeout=2)
+        except OSError as error:
+            logger.error("Atlas probe: node %s TCP connect failed (%s).", index, type(error).__name__)
+            continue
+        with connection:
+            try:
+                with tls_context.wrap_socket(connection, server_hostname=target):
+                    logger.info("Atlas probe: node %s TCP and TLS succeeded.", index)
+            except OSError as error:
+                logger.error("Atlas probe: node %s TLS failed (%s).", index, type(error).__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config.warn_on_insecure_defaults()
@@ -30,6 +72,11 @@ async def lifespan(app: FastAPI):
             type(error).__name__,
             error.code if isinstance(error, OperationFailure) else None,
         )
+        if isinstance(error, (ConnectionFailure, ConfigurationError)):
+            try:
+                await asyncio.wait_for(asyncio.to_thread(probe_atlas_connectivity), timeout=16)
+            except (OSError, TimeoutError) as probe_error:
+                logging.getLogger("lono").error("Atlas probe failed (%s).", type(probe_error).__name__)
         raise SystemExit(1) from None
     if config.SEED_DEMO_DATA:
         await seed_catalogue()
