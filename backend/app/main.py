@@ -4,6 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
+from pymongo.errors import ConfigurationError, ConnectionFailure, OperationFailure
 from starlette.middleware.cors import CORSMiddleware
 
 from . import config
@@ -23,14 +24,12 @@ async def lifespan(app: FastAPI):
     config.warn_on_insecure_defaults()
     try:
         await ensure_indexes()
-    except Exception as e:  # pymongo.errors.ServerSelectionTimeoutError and friends
-        if type(e).__name__ not in ("ServerSelectionTimeoutError", "ConnectionFailure", "AutoReconnect"):
-            raise
+    except (ConnectionFailure, ConfigurationError, OperationFailure) as error:
         logging.getLogger("lono").error(
-            "\n\n  Can't reach the database at MONGO_URL=%s\n"
-            "  - To try LoNo without installing MongoDB, set MONGO_URL=mongomock:// in backend/.env\n"
-            "    (or delete backend/.env and run start.cmd / start.sh to recreate it).\n"
-            "  - To keep data, start MongoDB (or use Docker mode: start.cmd -Docker).\n", config.MONGO_URL)
+            "MongoDB startup check failed (%s, code=%s).",
+            type(error).__name__,
+            error.code if isinstance(error, OperationFailure) else None,
+        )
         raise SystemExit(1) from None
     if config.SEED_DEMO_DATA:
         await seed_catalogue()
