@@ -40,7 +40,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22   # wrangler 4 requires Node.js 22+
 
       - name: Build the website
         working-directory: frontend
