@@ -57,8 +57,21 @@ def probe_atlas_connectivity():
             try:
                 with tls_context.wrap_socket(connection, server_hostname=target):
                     logger.info("Atlas probe: node %s TCP and TLS succeeded.", index)
+            except ssl.SSLCertVerificationError as error:
+                logger.error(
+                    "Atlas probe: node %s certificate verification failed (code=%s, reason=%s).",
+                    index, error.verify_code, error.reason,
+                )
+            except ssl.SSLError as error:
+                logger.error(
+                    "Atlas probe: node %s TLS failed (library=%s, reason=%s, errno=%s).",
+                    index, error.library, error.reason, error.errno,
+                )
             except OSError as error:
-                logger.error("Atlas probe: node %s TLS failed (%s).", index, type(error).__name__)
+                logger.error(
+                    "Atlas probe: node %s TLS failed (%s, errno=%s).",
+                    index, type(error).__name__, error.errno,
+                )
 
 
 @asynccontextmanager
