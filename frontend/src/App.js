@@ -55,6 +55,9 @@ const OfferDetail = page(() => import("@/pages/Offers").then((m) => ({ default: 
 const MyPasses = page(() => import("@/pages/Passes").then((m) => ({ default: m.MyPasses })));
 const PassPlayer = page(() => import("@/pages/Passes").then((m) => ({ default: m.PassPlayer })));
 const Admin = page(() => import("@/pages/Admin"));
+const StationDirectory = page(() => import("@/pages/Stations").then(m => ({ default: m.StationDirectory })));
+const StationPage = page(() => import("@/pages/Stations").then(m => ({ default: m.StationPage })));
+const StationStudio = page(() => import("@/pages/Stations").then(m => ({ default: m.StationStudio })));
 
 const PageLoading = () => (
   <div className="min-h-[60vh] grid place-items-center" role="status" aria-label="Loading">
@@ -94,10 +97,13 @@ export default function App() {
           <Route path="/" element={<Shell><Home /></Shell>} />
           <Route path="/watch/:id" element={<Shell><Watch /></Shell>} />
           <Route path="/live" element={<Shell><Live /></Shell>} />
+          <Route path="/stations" element={<Shell><StationDirectory /></Shell>} />
+          <Route path="/stations/:id" element={<Shell><StationPage /></Shell>} />
           <Route path="/browse/:kind" element={<Shell><Browse /></Shell>} />
           <Route path="/search" element={<Shell><Search /></Shell>} />
           <Route path="/channel/:id" element={<Shell><Channel /></Shell>} />
           <Route path="/studio" element={<Protected><Shell><Studio /></Shell></Protected>} />
+          <Route path="/studio/stations" element={<Protected><Shell><StationStudio /></Shell></Protected>} />
           <Route path="/wallet" element={<Protected><Shell><Wallet /></Shell></Protected>} />
           <Route path="/join/:token" element={<Join />} />
           <Route path="/studio/control/:roomId?" element={<Protected><Shell><ControlRoom /></Shell></Protected>} />
