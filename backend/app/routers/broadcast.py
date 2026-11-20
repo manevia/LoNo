@@ -17,12 +17,12 @@ from urllib.parse import parse_qs
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .. import config
 from ..audit import audit
-from ..broadcast import media
+from ..broadcast import abr, media
 from ..broadcast.platforms import BY_ID, PLATFORMS, target_url
 from ..broadcast.relays import manager
 from ..broadcast.secrets_box import decrypt, encrypt, hash_key, hint, new_stream_key, redact, sign, verify
@@ -106,7 +106,34 @@ async def ensure_media_path(s: dict) -> str:
     if s.get("media_path") != path:
         await db.broadcast_sessions.update_one({"id": s["id"]}, {"$set": {"media_path": path}})
         s["media_path"] = path
+    await _start_adaptive_hls(s, path)
     return path
+
+
+async def _start_adaptive_hls(s: dict, path: str):
+    """At most one additional encoder per server; failure never gates ingest."""
+    if not abr.enabled() or s.get("kind") != "live_tv":
+        return
+    info = await media.path_info(path) or {}
+    if not info.get("ready") or not info.get("has_video"):
+        return
+    # Session may have been ended while waiting for the canonical feed.
+    if not await db.broadcast_sessions.find_one({"id": s["id"], "status": {"$in": list(ACTIVE)}}):
+        return
+    running = {sid for (sid, target), relay in manager.relays.items()
+               if target == abr.TARGET and relay.state in ("idle", "connecting", "live", "retrying")}
+    if running:
+        return
+    try:
+        output = abr.folder(s["id"])
+        abr.cleanup(s["id"])
+        output.mkdir(parents=True, exist_ok=True)
+        await manager.start(s["id"], abr.TARGET,
+                            abr.args(_internal_src(s["ingest_id"], path), output, bool(info.get("has_audio")), rtsp=False),
+                            (config.MEDIA_INTERNAL_SECRET,))
+    except (OSError, ValueError):
+        # Adaptive playback is optional; the existing MediaMTX stream remains available.
+        return
 
 
 def _codec_args(tracks: list[str] | None) -> list[str]:
@@ -360,6 +387,8 @@ async def stop_session_for(user, session_id: str) -> dict:
     if s["status"] == "ended":
         return s                                    # stopping twice is safe
     await manager.stop(s["id"])
+    if abr.enabled():
+        abr.cleanup(s["id"])
     if s.get("content_id"):
         await db.content.delete_one({"id": s["content_id"]})
     await db.broadcast_sessions.update_one({"id": s["id"]}, {"$set": {"status": "ended", "ended_at": now_iso(), "content_id": None}})
@@ -594,6 +623,9 @@ async def on_feed_change(path: str, ready: bool):
     await _event(s, "stream.connected" if ready else "stream.disconnected")
     if ready and s["status"] != "live":
         await ensure_media_path(s)       # private test preview (converts browser codecs if needed)
+    if not ready and abr.enabled():
+        await manager.stop(s["id"], abr.TARGET)
+        abr.cleanup(s["id"])
     if s["status"] == "live":
         if ready:
             await _start_targets(s)      # restart destinations and start a new recording part
@@ -631,6 +663,25 @@ async def hls_proxy(rest: str):
         raise HTTPException(404, "This stream isn't live")
     if not re.fullmatch(r"[\w.\-/]+", file) or ".." in file:
         raise HTTPException(400)
+    # Adaptive assets use the *same* authorization as the original stream.
+    # The names are deliberately disjoint from MediaMTX's files; established
+    # single-stream clients can keep playing while the ladder becomes ready.
+    if abr.enabled() and s.get("kind") == "live_tv":
+        try:
+            state = (manager.get(s["id"]).get(abr.TARGET) or {}).get("state")
+            if file == "index.m3u8" and state == "live":
+                adaptive = abr.master(s["id"])
+                if adaptive and time.time() - adaptive.stat().st_mtime < 15:
+                    return FileResponse(adaptive, media_type="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-store"})
+            if file.startswith("abr_"):
+                asset = abr.asset(s["id"], file)
+                if not asset:
+                    raise HTTPException(404, "This adaptive segment is not available")
+                return FileResponse(asset, media_type="application/vnd.apple.mpegurl" if file.endswith(".m3u8") else "video/mp2t",
+                                    headers={"Cache-Control": "no-store"})
+        except (OSError, ValueError):
+            if file.startswith("abr_"):
+                raise HTTPException(404, "This adaptive segment is not available")
     url = f"{config.MEDIA_HLS_URL}/{s.get('media_path') or 'live/' + ingest_id}/{file}"
     client = httpx.AsyncClient(timeout=20, auth=(INTERNAL_USER, config.MEDIA_INTERNAL_SECRET))
     try:
