@@ -62,3 +62,30 @@ def test_station_tracks_live_session_and_real_guide(client, user, media_on):
     assert row["station_name"] == "Network TV" and row["now"]["title"] == "Live news"
     assert client.post(f"/api/broadcast/sessions/{session['id']}/stop", headers=h).status_code == 200
     assert not client.get(f"/api/stations/{sid}").json()["on_air"]
+
+
+def test_automation_schedule_fallback_live_override(client, user, media_on):
+    h = user["h"]
+    s = client.put("/api/creator/stations/live_tv", json={"name": "Automated TV"}, headers=h).json()
+    sid = s["id"]
+    root = f"/api/creator/stations/{sid}"
+    media = client.post("/api/storage/upload", headers=h, files={"file": ("programme.mp4", b"test data", "video/mp4")}).json()
+    fid = media["file_id"]
+    assert client.get(root + "/media", headers=h).json()[0]["id"] == fid
+    assert client.put(root + "/automation", headers=h, json={"enabled": True, "fallback_file_id": "unknown"}).status_code == 422
+    assert client.put(root + "/automation", headers=h, json={"enabled": True, "fallback_file_id": fid}).status_code == 200
+    detail = client.get(f"/api/stations/{sid}").json()
+    assert detail["playout"]["mode"] == "fallback" and detail["on_air"]
+    t = now()
+    body = {"title": "Scheduled show", "format": "prerecorded", "file_id": fid, "start": (t-timedelta(minutes=1)).isoformat(), "end": (t+timedelta(minutes=20)).isoformat()}
+    p = client.post(root + "/programmes", json=body, headers=h).json()
+    assert client.get(f"/api/stations/{sid}").json()["playout"]["mode"] == "scheduled"
+    session = client.post("/api/broadcast/sessions", headers=h, json={"title": "Presenter"}).json()
+    assert client.post(f"/api/broadcast/sessions/{session['id']}/start", headers=h).status_code == 200
+    assert client.get(f"/api/stations/{sid}").json()["playout"]["mode"] == "live"
+    assert client.post(f"/api/broadcast/sessions/{session['id']}/stop", headers=h).status_code == 200
+    assert client.get(f"/api/stations/{sid}").json()["playout"]["mode"] == "scheduled"
+    assert client.delete(root + f"/programmes/{p['id']}", headers=h).status_code == 200
+    assert client.get(f"/api/stations/{sid}").json()["playout"]["mode"] == "fallback"
+    assert client.put(root + "/automation", headers=h, json={"enabled": False}).status_code == 200
+    assert not client.get(f"/api/stations/{sid}").json()["on_air"]
