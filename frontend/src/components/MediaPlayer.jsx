@@ -18,6 +18,7 @@ const MediaPlayer = forwardRef(function MediaPlayer(
     autoPlay = false,
     onFatalError,              // (message) => void, when the stream can't be played
     onHls,                     // (hls | null) => void, for audio tracks / live edge
+    onPlaybackHealth,          // local playback diagnostics, not persisted
     className },
   ref,
 ) {
@@ -33,6 +34,7 @@ const MediaPlayer = forwardRef(function MediaPlayer(
   // Keep callbacks current without re-attaching the stream when a parent re-renders.
   const onFatalErrorRef = useRef(onFatalError); onFatalErrorRef.current = onFatalError;
   const onHlsRef = useRef(onHls); onHlsRef.current = onHls;
+  const onHealthRef = useRef(onPlaybackHealth); onHealthRef.current = onPlaybackHealth;
 
   // Prefer MSE/HLS.js for playlists. Some desktop browsers report native HLS
   // support but fail to demux live fragmented MP4 streams.
@@ -82,9 +84,9 @@ const MediaPlayer = forwardRef(function MediaPlayer(
       onHlsRef.current?.(hls);
       let manifestRetries = 0;
       let retries = 0;
+      let lastRecovery = 0;
       if (autoPlay) hls.on(Hls.Events.MANIFEST_PARSED, () => media.play().catch(() => {}));
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-        manifestRetries = 0;
         const list = data.levels.map((l, i) => ({ index: i, label: l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)} kbps` }));
         setLevels(list);
         if (dataSaver && list.length) { hls.autoLevelCapping = 0; }
@@ -92,10 +94,14 @@ const MediaPlayer = forwardRef(function MediaPlayer(
       hls.on(Hls.Events.ERROR, (_, d) => {
         if (cancelled || !d.fatal) return;
         const manifest = /manifest/i.test(d.details || "");
-        if (live && manifest && d.type === Hls.ErrorTypes.NETWORK_ERROR && manifestRetries < 5) {
-          // The converted stream may take several seconds to produce its first playlist.
+        if (live && d.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          // Refresh the master, including after a failed variant, so we can
+          // recover to the original MediaMTX stream if ABR becomes unavailable.
           if (retryTimer) return;
+          if (Date.now() - lastRecovery > 30_000) manifestRetries = 0;
+          if (manifestRetries >= 5) { fail("The live stream couldn't reconnect. Retry when your connection returns."); return; }
           manifestRetries++;
+          lastRecovery = Date.now();
           retryTimer = setTimeout(() => {
             retryTimer = undefined;
             if (!cancelled) hls.loadSource(src);
@@ -122,6 +128,34 @@ const MediaPlayer = forwardRef(function MediaPlayer(
       media.removeAttribute("src"); media.load();
     };
   }, [src, dataSaver, autoPlay, live]);
+
+  // Local viewer-side quality and buffering observations. Nothing is sent to
+  // the backend; creators can inspect the preview without extra telemetry load.
+  useEffect(() => {
+    const media = el.current;
+    if (!media || !src || !live || !onHealthRef.current) return undefined;
+    let started = false, buffering = false, stalls = 0;
+    const playing = () => { started = true; buffering = false; };
+    const waiting = () => { if (started && !buffering && !media.paused) stalls++; buffering = true; };
+    media.addEventListener("playing", playing);
+    media.addEventListener("waiting", waiting);
+    const report = () => {
+      const hls = hlsRef.current;
+      const level = hls?.levels?.[hls.currentLevel];
+      let buffer = 0;
+      for (let i = 0; i < media.buffered.length; i++) {
+        if (media.buffered.start(i) <= media.currentTime && media.buffered.end(i) >= media.currentTime) {
+          buffer = Math.max(0, media.buffered.end(i) - media.currentTime); break;
+        }
+      }
+      onHealthRef.current?.({ quality: level?.height || media.videoHeight || 0,
+        bandwidth: Number.isFinite(hls?.bandwidthEstimate) ? Math.round(hls.bandwidthEstimate / 1000) : null,
+        liveDelay: Number.isFinite(hls?.latency) ? Math.max(0, Math.round(hls.latency)) : null,
+        buffer: +buffer.toFixed(1), stalls, buffering });
+    };
+    const interval = setInterval(report, 2000);
+    return () => { clearInterval(interval); media.removeEventListener("playing", playing); media.removeEventListener("waiting", waiting); };
+  }, [src, live]);
 
   // Lock screen, headphones, car and TV remote media keys.
   useEffect(() => {
