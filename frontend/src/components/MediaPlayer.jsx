@@ -66,7 +66,16 @@ const MediaPlayer = forwardRef(function MediaPlayer(
       const hls = new Hls({
         capLevelToPlayerSize: true,          // never fetch more pixels than the screen shows
         startLevel: dataSaver ? 0 : -1,      // data saver starts at the lowest rendition
-        maxBufferLength: dataSaver ? 15 : 30,
+        maxBufferLength: live ? (dataSaver ? 24 : 20) : (dataSaver ? 15 : 30),
+        ...(live ? {
+          // This server uses conventional fMP4 HLS. A modest safety buffer
+          // absorbs jitter without letting viewers drift far behind live.
+          lowLatencyMode: false,
+          liveSyncDurationCount: dataSaver ? 5 : 4,
+          liveMaxLatencyDurationCount: dataSaver ? 12 : 10,
+          maxLiveSyncPlaybackRate: 1.05,
+          backBufferLength: 30,
+        } : {}),
       });
       usingHls = true;
       hlsRef.current = hls;
@@ -151,7 +160,7 @@ const MediaPlayer = forwardRef(function MediaPlayer(
   }, [src]);
 
   useEffect(() => { if (el.current) el.current.playbackRate = speed; }, [speed]);
-  const chooseLevel = (i) => { setLevel(i); if (hlsRef.current) { hlsRef.current.autoLevelCapping = -1; hlsRef.current.currentLevel = i; } };
+  const chooseLevel = (i) => { setLevel(i); if (hlsRef.current) { hlsRef.current.autoLevelCapping = i === -1 && dataSaver ? 0 : -1; hlsRef.current.currentLevel = i; } };
   const togglePip = async () => {
     try { if (document.pictureInPictureElement) await document.exitPictureInPicture(); else await el.current.requestPictureInPicture(); } catch { /* user gesture or support missing */ }
   };
