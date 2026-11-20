@@ -2,6 +2,7 @@
 import os
 import re
 import shutil
+import time
 from pathlib import Path
 
 from .. import config
@@ -14,6 +15,45 @@ _ASSET = re.compile(r"abr_(?:360|480|720)(?:\.m3u8|_[0-9]+\.ts)")
 
 def enabled():
     return os.getenv("MEDIA_ABR_ENABLED", "false").lower() in ("1", "true", "yes")
+
+
+def capacity(running: int) -> tuple[int, str | None]:
+    """Soft admission control: never stop an active stream to admit another."""
+    cpu = os.cpu_count() or 1
+    try:
+        cpu = min(cpu, len(os.sched_getaffinity(0)))
+    except (AttributeError, OSError):
+        pass
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if quota != "max":
+            cpu = min(cpu, max(1, int(quota) // int(period)))
+    except (OSError, ValueError, ZeroDivisionError):
+        pass
+    try:
+        requested = max(0, int(os.getenv("MEDIA_ABR_MAX_SESSIONS", "1")))
+    except ValueError:
+        requested = 1
+    limit = min(requested, max(1, cpu // 4))
+    if running >= limit:
+        return limit, "Encoder capacity occupied"
+    try:
+        if os.getloadavg()[0] >= cpu * 0.75:
+            return limit, "Server CPU load is high"
+    except (AttributeError, OSError):
+        pass
+    try:
+        if shutil.disk_usage(config.RECORDINGS_DIR).free < 1024 ** 3:
+            return limit, "Insufficient free disk space"
+    except OSError:
+        return limit, "Media storage unavailable"
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:") and int(line.split()[1]) < 1024 ** 2:
+                return limit, "Insufficient available memory"
+    except (OSError, ValueError):
+        pass
+    return limit, None
 
 
 def folder(session_id: str) -> Path:
@@ -77,6 +117,14 @@ def master(session_id: str):
         except OSError:
             return None
     return path
+
+
+def ready_master(session_id: str):
+    try:
+        path = master(session_id)
+        return path if path and time.time() - path.stat().st_mtime < 15 else None
+    except (OSError, ValueError):
+        return None
 
 
 def cleanup(session_id: str):
