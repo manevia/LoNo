@@ -68,10 +68,8 @@ services:
       - mongo-data:/data/db
 
   media:
-    image: bluenviron/mediamtx:1.9.3
+    build: ./media
     restart: unless-stopped
-    volumes:
-      - ./media/mediamtx.yml:/mediamtx.yml:ro
     environment:
       MTX_AUTHHTTPADDRESS: http://backend:8001/api/broadcast/mtx/auth
       MTX_APIADDRESS: ':9997'
