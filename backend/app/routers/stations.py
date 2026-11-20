@@ -60,6 +60,8 @@ class ProgrammeIn(BaseModel):
     end: datetime
     format: Literal["live", "prerecorded"] = "live"
     file_id: str | None = Field(default=None, max_length=100)
+    repeat: Literal["none", "daily", "weekly"] = "none"
+    occurrences: int = Field(default=1, ge=1, le=52)
 
 
 class AutomationIn(BaseModel):
@@ -109,6 +111,26 @@ def programme(body: ProgrammeIn) -> dict:
         raise HTTPException(422, "Choose a current or future programme within one year")
     return {"id": uid(), "title": body.title.strip(), "description": body.description.strip(),
             "start": start.isoformat(), "end": end.isoformat(), "format": body.format, "file_id": body.file_id}
+
+
+def expand_programmes(body: ProgrammeIn):
+    """Materialize bounded UTC repeats so every existing guide sees the same slots."""
+    first = programme(body)
+    if body.repeat == "none":
+        return [first]
+    if body.occurrences < 2:
+        raise HTTPException(422, "Select at least two occurrences for a recurring programme")
+    step = timedelta(days=1 if body.repeat == "daily" else 7)
+    series_id = uid()
+    result = []
+    for i in range(body.occurrences):
+        start = datetime.fromisoformat(first["start"]) + i * step
+        end = datetime.fromisoformat(first["end"]) + i * step
+        if start > now() + timedelta(days=365):
+            raise HTTPException(422, "All occurrences must start within one year")
+        result.append({**first, "id": first["id"] if i == 0 else uid(), "start": start.isoformat(),
+                       "end": end.isoformat(), "series_id": series_id, "repeat": body.repeat})
+    return result
 
 
 def overlaps(a, b):
@@ -212,28 +234,30 @@ async def add_programme(station_id: str, body: ProgrammeIn, user=Depends(get_use
     if user.get("broadcast_blocked"):
         raise HTTPException(403, "Your broadcasting permission is restricted")
     s = await _owned(station_id, user)
-    p = programme(body)
+    slots = expand_programmes(body)
     if body.file_id:
         if body.format != "prerecorded":
             raise HTTPException(422, "Media can only be attached to a prerecorded programme")
         await _check_file(body.file_id, s)
     items = [x for x in s.get("programmes", []) if x["end"] > now_iso()]
-    if len(items) >= 100:
+    if len(items) + len(slots) > 100:
         raise HTTPException(409, "Maximum of 100 upcoming programmes")
-    if any(overlaps(x, p) for x in items):
+    if any(overlaps(x, p) for x in items for p in slots):
         raise HTTPException(409, "Programme overlaps an existing listing")
-    result = await db.stations.update_one({"id": station_id, "revision": s["revision"]}, {"$set": {"programmes": sorted(items + [p], key=lambda x: x["start"])}, "$inc": {"revision": 1}})
+    result = await db.stations.update_one({"id": station_id, "revision": s["revision"]}, {"$set": {"programmes": sorted(items + slots, key=lambda x: x["start"])}, "$inc": {"revision": 1}})
     if not result.matched_count:
         raise HTTPException(409, "Schedule changed; refresh and retry")
-    return p
+    await audit("station_programmes_added", user, target=station_id, details={"count": len(slots)})
+    return {**slots[0], "occurrences_created": len(slots)}
 
 
 @router.get("/creator/stations/{station_id}/media")
 async def media_library(station_id: str, user=Depends(get_user)):
     s = await _owned(station_id, user)
     q = {"user_id": user["id"], "storage_path": {"$regex": "^uploads/"}, "is_deleted": False, "pending": {"$ne": True}, "protected": {"$ne": True}}
-    rows = await db.files.find(q, {"_id": 0, "id": 1, "user_id": 1, "storage_path": 1, "content_type": 1, "original_filename": 1}).sort("created_at", -1).to_list(500)
-    return [{"id": f["id"], "name": f.get("original_filename", "Media"), "content_type": f["content_type"]} for f in rows if eligible_file(f, s)]
+    rows = await db.files.find(q, {"_id": 0, "id": 1, "user_id": 1, "storage_path": 1, "content_type": 1, "original_filename": 1, "size": 1, "created_at": 1}).sort("created_at", -1).to_list(500)
+    return [{"id": f["id"], "name": f.get("original_filename", "Media"), "content_type": f["content_type"],
+             "size": f.get("size"), "created_at": f.get("created_at"), "url": "/api/files/" + f["storage_path"]} for f in rows if eligible_file(f, s)]
 
 
 @router.put("/creator/stations/{station_id}/automation")

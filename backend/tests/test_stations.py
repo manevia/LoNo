@@ -45,6 +45,27 @@ def test_station_branding_validation(client, user):
     assert client.put(path, json={"name": "TV", "logo_url": "/api/files/uploads/another/unknown.png"}, headers=user["h"]).status_code == 422
 
 
+def test_recurring_schedule_atomic_conflicts(client, user, admin):
+    h = user["h"]
+    sid = client.put("/api/creator/stations/live_radio", headers=h, json={"name": "Recurring Radio"}).json()["id"]
+    ep = f"/api/creator/stations/{sid}/programmes"
+    start = now() + timedelta(hours=2)
+    body = {"title": "Daily show", "start": start.isoformat(), "end": (start+timedelta(hours=1)).isoformat(), "repeat": "daily", "occurrences": 3}
+    assert client.post(ep, headers=admin["h"], json=body).status_code == 404
+    conflict = {"title": "Existing", "start": (start+timedelta(days=2)).isoformat(), "end": (start+timedelta(days=2,hours=1)).isoformat()}
+    old = client.post(ep, headers=h, json=conflict).json()
+    assert client.post(ep, headers=h, json=body).status_code == 409
+    assert len(client.get(f"/api/stations/{sid}").json()["programmes"]) == 1
+    assert client.delete(ep+"/"+old["id"], headers=h).status_code == 200
+    result = client.post(ep, headers=h, json=body)
+    assert result.status_code == 200, result.text
+    assert result.json()["occurrences_created"] == 3
+    slots = client.get(f"/api/stations/{sid}").json()["programmes"]
+    assert len(slots) == 3 and len({p["series_id"] for p in slots}) == 1
+    assert slots[2]["start"] == conflict["start"]
+    assert client.post(ep, headers=h, json={**body,"occurrences":53}).status_code == 422
+
+
 def test_import_flagship_ident(client, user, admin, monkeypatch):
     from app.routers import stations
     s = client.put("/api/creator/stations/live_radio", json={"name": "Opening station"}, headers=user["h"]).json()
