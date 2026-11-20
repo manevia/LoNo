@@ -1,0 +1,82 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { CalendarDays, Radio, Tv, Image as ImageIcon } from "lucide-react";
+import { toast } from "sonner";
+import { api, errorText, resolveMedia } from "@/lib/api";
+import { uploadFile } from "@/lib/upload";
+
+const KINDS = [["live_tv", "Television"], ["live_radio", "Radio"]];
+const name = k => KINDS.find(([id]) => id === k)?.[1] || k;
+const card = "rounded-2xl border border-white/10 bg-[#121212] p-5";
+const btn = "inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm hover:bg-white/10 disabled:opacity-40";
+const primary = "inline-flex items-center gap-2 rounded-full bg-[#FF3B30] hover:bg-[#FF5C53] px-5 py-2.5 text-sm font-medium disabled:opacity-40";
+const input = "block w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm mt-1";
+const frame = "max-w-[1300px] mx-auto px-4 md:px-8 pt-8 pb-24 space-y-6";
+const fmt = s => new Date(s).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+const liveLink = s => `/live/play/${s.live_content_id}?list=${s.kind === "live_radio" ? "radio" : "tv"}`;
+const fresh = { name: "", description: "", category: "General", logo_url: "", banner_url: "" };
+const blankProgram = { title: "", description: "", start: "", end: "", format: "live" };
+
+function useLoad(url, interval = 0) {
+  const [data, setData] = useState(null); const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    try { const r = await api.get(url); setData(r.data); setError(""); }
+    catch (e) { setError(errorText(e)); }
+  }, [url]);
+  useEffect(() => { setData(null); load(); if (!interval) return; const timer = setInterval(() => { if (!document.hidden) load(); }, interval); return () => clearInterval(timer); }, [load, interval]);
+  return { data, error, load };
+}
+const Status = ({ s }) => <span className={`text-xs font-semibold rounded-full px-3 py-1 ${s.on_air ? "bg-[#FF3B30] text-white" : "bg-white/10 text-gray-300"}`}>{s.on_air ? "ON AIR" : "OFF AIR"}</span>;
+function Logo({ s }) { const Icon = s.kind === "live_radio" ? Radio : Tv; return s.logo_url ? <img src={resolveMedia(s.logo_url)} alt="" className="w-16 h-16 rounded-xl object-cover bg-white/10" /> : <div className="w-16 h-16 rounded-xl bg-white/10 grid place-items-center"><Icon className="w-7 h-7 text-gray-300" /></div>; }
+function Schedule({ station, remove }) {
+  return <div className="space-y-3"><h3 className="font-display text-xl flex gap-2 items-center"><CalendarDays className="w-5 h-5" /> Programme guide</h3>
+    <p className="text-xs text-gray-400">Times are shown in your local time zone. Listings do not start streams automatically.</p>
+    {!station.programmes?.length ? <p className="text-gray-400">No upcoming programmes announced.</p> : station.programmes.map(p => <article key={p.id} className="border-b border-white/10 pb-3 flex flex-wrap items-start gap-3"><div className="flex-1"><div className="text-xs text-gray-400">{fmt(p.start)} – {fmt(p.end)} · {p.format === "live" ? "Live programme" : "Prerecorded programme"}{station.now?.id === p.id && " · Scheduled now"}</div><div className="font-semibold mt-1">{p.title}</div>{p.description && <p className="text-sm text-gray-300 mt-1">{p.description}</p>}</div>{remove && <button className={btn} onClick={() => remove(p)}>Remove</button>}</article>)}
+  </div>;
+}
+function StationCard({ s }) { return <article className={card}>
+  <Link to={`/stations/${s.id}`} className="flex items-center gap-3"><Logo s={s} /><div className="min-w-0 flex-1"><h2 className="font-display text-xl truncate">{s.name}</h2><p className="text-xs text-gray-400">{name(s.kind)} · {s.category}</p></div><Status s={s} /></Link>
+  <p className="text-sm text-gray-300 mt-3 line-clamp-2">{s.description || "Station on the LoNo network."}</p>
+  <p className="text-xs text-gray-400 mt-3">{s.on_air ? `On air: ${s.live_title}` : s.now ? `Scheduled now: ${s.now.title}` : s.next ? `Next: ${s.next.title} · ${fmt(s.next.start)}` : "No upcoming programme"}</p>
+  <div className="flex gap-2 mt-4"><Link className={btn} to={`/stations/${s.id}`}>Station & guide</Link>{s.on_air && <Link className={primary} to={liveLink(s)}>Watch / listen live</Link>}</div>
+</article>; }
+
+export function StationDirectory() {
+  const [kind, setKind] = useState(""); const [offset, setOffset] = useState(0);
+  const { data, error } = useLoad(`/stations?offset=${offset}${kind ? `&kind=${kind}` : ""}`, 30000);
+  return <main className={frame}><header><Link to="/live" className="text-gray-400 text-sm hover:text-white">← Live</Link><h1 className="font-display text-4xl mt-3">LoNo TV & Radio Network</h1><p className="text-gray-400 mt-2">Discover permanent stations and their real programme schedules, even when they are off air.</p></header>
+    <div role="group" aria-label="Station type" className="flex flex-wrap gap-2">{[["", "All stations"], ...KINDS].map(([k, label]) => <button key={k} className={`${btn} ${kind === k ? "bg-white text-black" : ""}`} onClick={() => {setKind(k);setOffset(0);}} aria-pressed={kind === k}>{label}</button>)}</div>
+    {error && <p role="alert" className="text-red-300">{error}</p>}{!data ? <p>Loading stations…</p> : <><div className="grid md:grid-cols-2 gap-4">{data.stations.map(s => <StationCard key={s.id} s={s} />)}</div>{!data.stations.length && <p className="text-gray-400">No stations on this page yet.</p>}<div className="flex gap-2">{offset > 0 && <button className={btn} onClick={() => setOffset(offset-100)}>Previous</button>}{data.has_more && <button className={btn} onClick={() => setOffset(offset+100)}>Next page</button>}</div></>}
+  </main>;
+}
+
+export function StationPage() {
+  const { id } = useParams(); const { data:s, error } = useLoad(`/stations/${encodeURIComponent(id)}`, 15000);
+  return <main className={frame}><Link to="/stations" className="text-gray-400 text-sm hover:text-white">← Station directory</Link>{error ? <p role="alert" className="text-red-300">{error}</p> : !s ? <p>Loading station…</p> : <><div className="rounded-2xl overflow-hidden bg-[#121212] border border-white/10">{s.banner_url && <img src={resolveMedia(s.banner_url)} alt="" className="w-full h-48 md:h-60 object-cover" />}<div className="p-5 flex flex-wrap gap-4 items-center"><Logo s={s}/><div className="flex-1"><h1 className="font-display text-3xl">{s.name}</h1><p className="text-gray-400 text-sm">{name(s.kind)} · {s.category}</p></div><Status s={s}/>{s.on_air && <Link className={primary} to={liveLink(s)}>Watch / listen live</Link>}</div></div><p className="text-gray-300">{s.description}</p><div className={card}><h2 className="font-semibold">{s.on_air ? `On air: ${s.live_title}` : "This station is off air"}</h2><p className="text-sm text-gray-400 mt-1">{s.now ? `Scheduled now: ${s.now.title}` : s.next ? `Next: ${s.next.title} at ${fmt(s.next.start)}` : "Check back for programming."}</p>{s.channel_id && <Link to={`/channel/${s.channel_id}`} className="text-sm text-[#FF8A82] mt-2 inline-block">Browse creator uploads</Link>}</div><div className={card}><Schedule station={s}/></div></>}</main>;
+}
+
+export function StationStudio() {
+  const { data, error, load } = useLoad("/creator/stations"); const [kind, setKind] = useState("live_tv");
+  const [form, setForm] = useState(fresh); const [program, setProgram] = useState(blankProgram); const [busy, setBusy] = useState(false);
+  const station = data?.find(s => s.kind === kind);
+  useEffect(() => { setForm(station ? Object.fromEntries(Object.keys(fresh).map(k => [k, station[k] || fresh[k]])) : fresh); }, [station]);
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const save = async e => { e.preventDefault(); setBusy(true); try { await api.put(`/creator/stations/${kind}`, form); toast.success("Station saved"); await load(); } catch(e) { toast.error(errorText(e)); } finally {setBusy(false);} };
+  const upload = async (key, file) => { if(!file) return; setBusy(true); try {const r = await uploadFile(file);set(key,r.url);toast.success("Image uploaded; save branding to apply it");} catch(e){toast.error(errorText(e));}finally{setBusy(false);} };
+  const add = async e => { e.preventDefault(); setBusy(true); try {await api.post(`/creator/stations/${station.id}/programmes`, {...program,start:new Date(program.start).toISOString(),end:new Date(program.end).toISOString()});setProgram(blankProgram);await load();toast.success("Programme added");}catch(e){toast.error(errorText(e));}finally{setBusy(false);} };
+  const remove = async p => { if(!window.confirm(`Remove “${p.title}” from the programme guide?`))return; try {await api.delete(`/creator/stations/${station.id}/programmes/${p.id}`);await load();}catch(e){toast.error(errorText(e));} };
+  return <main className={frame}><header><Link to="/studio" className="text-gray-400 text-sm">← Creator Studio</Link><h1 className="font-display text-4xl mt-3">Station Studio</h1><p className="text-gray-400 mt-2">Establish your television channel and radio station. Each gets a permanent public page and schedule; use Live Studio to go on air.</p></header>
+    <div className="flex gap-2">{KINDS.map(([k,label]) => <button key={k} aria-pressed={kind===k} className={`${btn} ${kind===k?"bg-white text-black":""}`} onClick={()=>{setKind(k);setProgram(blankProgram);}}>{label}</button>)}</div>
+    {error && <p role="alert" className="text-red-300">{error}</p>}{data && <><form onSubmit={save} className={`${card} space-y-4`}><h2 className="font-display text-xl">{station ? "Edit station branding" : `Create ${name(kind)} station`}</h2>{station?.hidden && <p className="text-yellow-300">Station hidden by moderation: {station.moderation_reason}</p>}
+      <div className="grid md:grid-cols-2 gap-4"><label>Name<input required maxLength={100} value={form.name} className={input} onChange={e=>set("name",e.target.value)}/></label><label>Category<input required maxLength={60} value={form.category} className={input} onChange={e=>set("category",e.target.value)}/></label></div><label>About the station<textarea value={form.description} maxLength={1500} className={input} onChange={e=>set("description",e.target.value)}/></label>
+      <div className="grid md:grid-cols-2 gap-4">{[["logo_url","Logo"],["banner_url","Banner"]].map(([key,label])=><div key={key}><label>{label} HTTPS URL<input value={form[key]} className={input} onChange={e=>set(key,e.target.value)}/></label><label className={`${btn} mt-2 cursor-pointer`}><ImageIcon className="w-4 h-4"/> Upload {label.toLowerCase()}<input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={e=>upload(key,e.target.files?.[0])}/></label>{form[key] && <img alt={`${label} preview`} src={resolveMedia(form[key])} className="mt-2 max-h-28 rounded-lg object-contain"/>}</div>)}</div>
+      <button type="submit" disabled={busy} className={primary}>Save station</button>{station?.visible && <Link className={`${btn} ml-2`} to={`/stations/${station.id}`}>View public station</Link>}</form>
+      {station && <><div className={card}><div className="flex flex-wrap items-center gap-3"><Status s={station}/><span className="flex-1 text-sm text-gray-400">Broadcast using the matching TV or Radio format.</span><Link to="/studio/live" className={primary}>Open Live Studio</Link></div></div><form className={`${card} space-y-3`} onSubmit={add}><h2 className="font-display text-xl">Schedule a programme</h2><label>Programme title<input required maxLength={140} className={input} value={program.title} onChange={e=>setProgram({...program,title:e.target.value})}/></label><label>Description<textarea maxLength={1000} className={input} value={program.description} onChange={e=>setProgram({...program,description:e.target.value})}/></label><div className="grid md:grid-cols-3 gap-3"><label>Start (local)<input required type="datetime-local" className={input} value={program.start} onChange={e=>setProgram({...program,start:e.target.value})}/></label><label>End (local)<input required type="datetime-local" className={input} value={program.end} onChange={e=>setProgram({...program,end:e.target.value})}/></label><label>Format<select className={input} value={program.format} onChange={e=>setProgram({...program,format:e.target.value})}><option value="live">Live programme</option><option value="prerecorded">Prerecorded listing</option></select></label></div><p className="text-xs text-gray-400">This is a public guide listing. It does not currently initiate playback or automated playout.</p><button className={primary} disabled={busy}>Add to guide</button></form><section className={card}><Schedule station={station} remove={remove}/></section></>}
+    </>}</main>;
+}
+
+export function AdminStations() {
+  const [offset,setOffset] = useState(0); const { data,error,load } = useLoad(`/admin/stations?offset=${offset}`); const [busy,setBusy] = useState(false);
+  const change = async s => {const reason = window.prompt(`${s.hidden?"Restore":"Hide"} this public station page? This does not end a live broadcast. Enter an audit reason.`)?.trim(); if(!reason||reason.length<3)return;setBusy(true);try{await api.post(`/admin/stations/${s.id}/visibility`,{hidden:!s.hidden,reason});await load();toast.success("Station visibility updated");}catch(e){toast.error(errorText(e));}finally{setBusy(false);}};
+  return <section className="space-y-4"><h2 className="font-display text-2xl">Permanent TV & Radio Stations</h2><p className="text-sm text-gray-400">Manage station directory visibility. Use Live broadcasts to stop a live broadcast or Users to restrict broadcasting permissions.</p>{error && <p role="alert" className="text-red-300">{error}</p>}{data?.stations.map(s=><article key={s.id} className={`${card} flex flex-wrap gap-3 items-center`}><Logo s={s}/><div className="flex-1"><h3 className="font-semibold">{s.name}</h3><p className="text-sm text-gray-400">{name(s.kind)} · {s.category} · {s.visible?"Public":"Not public"} · {s.programmes.length} upcoming</p>{s.moderation_reason && <p className="text-xs text-yellow-300">{s.moderation_reason}</p>}</div><Status s={s}/>{s.visible && <Link className={btn} to={`/stations/${s.id}`}>View</Link>}<button className={btn} disabled={busy} onClick={()=>change(s)}>{s.hidden?"Restore page":"Hide page"}</button></article>)}{data && !data.stations.length && <p className="text-gray-400">No permanent stations yet.</p>}<div className="flex gap-2">{offset>0 && <button className={btn} onClick={()=>setOffset(offset-100)}>Previous</button>}{data?.has_more && <button className={btn} onClick={()=>setOffset(offset+100)}>Next page</button>}</div></section>;
+}
