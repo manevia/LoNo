@@ -40,9 +40,9 @@ export function deviceName(d, i, kind) {
 }
 
 export async function openCamera(deviceId, quality = "720p") {
-  const size = quality === "1080p" ? { width: 1920, height: 1080 } : quality === "480p" ? { width: 854, height: 480 } : { width: 1280, height: 720 };
+  const size = quality === "1080p" ? { width: 1920, height: 1080 } : quality === "480p" ? { width: 854, height: 480 } : quality === "360p" ? { width: 640, height: 360 } : { width: 1280, height: 720 };
   return navigator.mediaDevices.getUserMedia({
-    video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: size.width }, height: { ideal: size.height }, frameRate: { ideal: 30 } },
+    video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: size.width }, height: { ideal: size.height }, frameRate: { ideal: quality === "360p" ? 24 : 30 } },
     audio: false,
   });
 }
