@@ -331,6 +331,8 @@ class SessionIn(BaseModel):
 
 async def create_session_for(user, body: SessionIn, idempotency_key: str | None = None) -> dict:
     _require_media()
+    if user.get("broadcast_blocked"):
+        raise HTTPException(403, "Your broadcasting permission is restricted. Contact LoNo support.")
     if idempotency_key:
         prev = await db.broadcast_sessions.find_one({"owner_id": user["id"], "idempotency_key": idempotency_key}, {"_id": 0})
         if prev:
@@ -385,6 +387,8 @@ async def get_session(session_id: str, user=Depends(get_user)):
 
 async def start_session_for(user, session_id: str) -> dict:
     _require_media()
+    if user.get("broadcast_blocked"):
+        raise HTTPException(403, "Your broadcasting permission is restricted. Contact LoNo support.")
     s = await _session(session_id, user)
     if s["status"] == "live":
         return s                                    # starting twice is safe
@@ -427,7 +431,7 @@ async def stop_session_for(user, session_id: str) -> dict:
         abr.cleanup(s["id"])
     if s.get("content_id"):
         await db.content.delete_one({"id": s["content_id"]})
-    await db.broadcast_sessions.update_one({"id": s["id"]}, {"$set": {"status": "ended", "ended_at": now_iso(), "content_id": None}})
+    await db.broadcast_sessions.update_one({"id": s["id"]}, {"$set": {"status": "ended", "ended_at": now_iso(), "last_content_id": s.get("content_id"), "content_id": None}})
     s = await _session(session_id, user)
     await _event(s, "broadcast.ended", title=s["title"])
     if s.get("record") and s.get("started_at"):
@@ -473,6 +477,8 @@ async def whip_publish(request: Request, user=Depends(get_user)):
     """Creator Studio sends its WebRTC offer here; LoNo forwards it to the media
     server with the creator's stream key, so the key never reaches the browser."""
     _require_media()
+    if user.get("broadcast_blocked"):
+        raise HTTPException(403, "Your broadcasting permission is restricted. Contact LoNo support.")
     s = await db.broadcast_sessions.find_one({"owner_id": user["id"], "status": {"$in": list(ACTIVE)}}, {"_id": 0})
     if not s:
         raise HTTPException(409, "Create a test or live session first")
@@ -552,6 +558,8 @@ class PublishIn(BaseModel):
 
 
 async def _publish_recording(rec: dict):
+    if not await db.recordings.find_one({"id": rec["id"], "moderation_hold": {"$ne": True}}):
+        return
     s = await db.broadcast_sessions.find_one({"id": rec["session_id"]}) or {}
     owner = await db.users.find_one({"id": rec["owner_id"]})
     ch = await _channel_for(owner) if owner else {}
@@ -562,7 +570,9 @@ async def _publish_recording(rec: dict):
                "channel_id": ch.get("id"), "views": 0, "likes": 0, "rating": None, "year": now().year,
                "created_at": now_iso(), "recording_id": rec["id"]}
     await db.content.insert_one(dict(content))
-    await db.recordings.update_one({"id": rec["id"]}, {"$set": {"visibility": "public", "content_id": content["id"], "publish_at": None}})
+    result = await db.recordings.update_one({"id": rec["id"], "moderation_hold": {"$ne": True}}, {"$set": {"visibility": "public", "content_id": content["id"], "publish_at": None}})
+    if not result.matched_count:
+        await db.content.delete_one({"id": content["id"]})
 
 
 def signed_download(rec: dict, ttl: int = 3600) -> dict:
@@ -587,6 +597,8 @@ async def publish_recording(rec_id: str, body: PublishIn, user=Depends(get_user)
         raise HTTPException(404, "Recording not found")
     if rec["status"] != "ready":
         raise HTTPException(409, "The recording isn't ready yet")
+    if rec.get("moderation_hold") and body.when != "private":
+        raise HTTPException(403, "This recording is under moderation review.")
     if body.title:
         await db.recordings.update_one({"id": rec_id}, {"$set": {"title": body.title.strip()}})
         rec["title"] = body.title.strip()
@@ -604,13 +616,15 @@ async def publish_recording(rec_id: str, body: PublishIn, user=Depends(get_user)
             raise HTTPException(422, "Give a valid date and time to publish")
         if when.tzinfo is None:
             raise HTTPException(422, "Include a time zone in the publish time")
-        await db.recordings.update_one({"id": rec_id}, {"$set": {"visibility": "scheduled", "publish_at": when.isoformat()}})
+        result = await db.recordings.update_one({"id": rec_id, "moderation_hold": {"$ne": True}}, {"$set": {"visibility": "scheduled", "publish_at": when.isoformat()}})
+        if not result.matched_count:
+            raise HTTPException(403, "This recording is under moderation review.")
     await audit(f"recording_{body.when}", user, target=rec_id)
     return await db.recordings.find_one({"id": rec_id}, {"_id": 0})
 
 
 async def publish_due_recordings():
-    async for rec in db.recordings.find({"visibility": "scheduled", "publish_at": {"$lte": now_iso()}}, {"_id": 0}):
+    async for rec in db.recordings.find({"visibility": "scheduled", "publish_at": {"$lte": now_iso()}, "moderation_hold": {"$ne": True}}, {"_id": 0}):
         await _publish_recording(rec)
 
 
@@ -642,8 +656,8 @@ async def mtx_auth(request: Request):
         key = password or (parse_qs(b.get("query") or "").get("key") or [""])[0]
         ing = await db.ingests.find_one({"id": path.split("/", 1)[1]})
         if ing and key and secrets.compare_digest(hash_key(key), ing["key_hash"]):
-            owner = await db.users.find_one({"id": ing["owner_id"]}, {"suspended": 1})
-            if owner and not owner.get("suspended"):
+            owner = await db.users.find_one({"id": ing["owner_id"]}, {"suspended": 1, "broadcast_blocked": 1})
+            if owner and not owner.get("suspended") and not owner.get("broadcast_blocked"):
                 return Response(status_code=204)
     raise HTTPException(401)
 
