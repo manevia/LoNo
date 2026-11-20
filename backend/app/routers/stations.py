@@ -1,8 +1,4 @@
-"""Permanent TV/radio station identity and real creator-authored programme listings.
-
-Schedules advertise programming only. They never start an encoder or play a file.
-Public playback links are resolved from currently published broadcast sessions.
-"""
+"""Permanent stations with clock-synchronised, viewer-side scheduled playout."""
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from urllib.parse import urlsplit
@@ -57,6 +53,44 @@ class ProgrammeIn(BaseModel):
     start: datetime
     end: datetime
     format: Literal["live", "prerecorded"] = "live"
+    file_id: str | None = Field(default=None, max_length=100)
+
+
+class AutomationIn(BaseModel):
+    enabled: bool = False
+    fallback_file_id: str | None = Field(default=None, max_length=100)
+
+
+def eligible_file(f, station):
+    """Only completed, unprotected first-party uploads of the station owner."""
+    if not f or f.get("user_id") != station["owner_id"] or f.get("protected") or f.get("pending") or f.get("is_deleted"):
+        return False
+    if not f.get("storage_path", "").startswith(f"uploads/{station['owner_id']}/"):
+        return False
+    types = ("video/mp4", "video/webm") if station["kind"] == "live_tv" else ("audio/mpeg", "audio/mp4", "audio/ogg", "audio/webm", "audio/wav", "audio/x-wav")
+    return f.get("content_type", "").lower() in types
+
+
+async def _check_file(file_id, station):
+    f = await db.files.find_one({"id": file_id, "user_id": station["owner_id"]}, {"_id": 0})
+    if not eligible_file(f, station):
+        raise HTTPException(422, "Select an eligible media upload from your account")
+    return f
+
+
+def playout(s, active, live_url, current, next_program, files, clock):
+    """A real public live session always overrides the time-based schedule."""
+    if active and live_url:
+        return {"mode": "live", "key": active["content_id"], "title": active["title"], "url": live_url}
+    if not s.get("automation_enabled"):
+        return None
+    scheduled = current and current.get("format") == "prerecorded" and files.get(current.get("file_id"))
+    fallback = files.get(s.get("fallback_file_id"))
+    if eligible_file(scheduled, s):
+        return {"mode": "scheduled", "key": current["id"], "title": current["title"], "url": "/api/files/" + scheduled["storage_path"], "anchor": current["start"], "until": current["end"]}
+    if eligible_file(fallback, s):
+        return {"mode": "fallback", "key": fallback["id"], "title": "Continuous programming", "url": "/api/files/" + fallback["storage_path"], "anchor": s.get("automation_anchor") or s["created_at"], "until": current["end"] if current else next_program["start"] if next_program else None}
+    return None
 
 
 def programme(body: ProgrammeIn) -> dict:
@@ -68,7 +102,7 @@ def programme(body: ProgrammeIn) -> dict:
     if end <= now() or start > now() + timedelta(days=365):
         raise HTTPException(422, "Choose a current or future programme within one year")
     return {"id": uid(), "title": body.title.strip(), "description": body.description.strip(),
-            "start": start.isoformat(), "end": end.isoformat(), "format": body.format}
+            "start": start.isoformat(), "end": end.isoformat(), "format": body.format, "file_id": body.file_id}
 
 
 def overlaps(a, b):
@@ -90,9 +124,13 @@ async def _decorate(stations, *, private=False):
     sessions = await db.broadcast_sessions.find({"owner_id": {"$in": list(owners)}, "status": "live", "visibility": "public"},
          {"_id": 0, "owner_id": 1, "kind": 1, "content_id": 1, "title": 1}).sort("started_at", -1).to_list(2 * len(owners))
     content_ids = [s["content_id"] for s in sessions if s.get("content_id")]
-    published = {c["id"] for c in await db.content.find({"id": {"$in": content_ids}, "gated": {"$ne": True}}, {"id": 1}).to_list(len(content_ids) or 1)}
+    published = {c["id"]: c.get("stream_url") for c in await db.content.find({"id": {"$in": content_ids}, "gated": {"$ne": True}}, {"id": 1, "stream_url": 1}).to_list(len(content_ids) or 1)}
     live = {(s["owner_id"], s["kind"]): s for s in reversed(sessions) if s.get("content_id") in published}
     t = now_iso()
+    media_ids = {p.get("file_id") for s in stations for p in s.get("programmes", []) if p.get("end", "") > t}
+    media_ids.update(s.get("fallback_file_id") for s in stations)
+    media_ids.discard(None)
+    files = {f["id"]: f for f in await db.files.find({"id": {"$in": list(media_ids)}}, {"_id": 0}).to_list(len(media_ids) or 1)}
     result = []
     for s in stations:
         visible = not s.get("hidden") and s["owner_id"] in allowed
@@ -100,14 +138,19 @@ async def _decorate(stations, *, private=False):
             continue
         programmes = sorted((p for p in s.get("programmes", []) if p["end"] > t), key=lambda p: p["start"])
         active = live.get((s["owner_id"], s["kind"])) if visible else None
+        current = next((p for p in programmes if p["start"] <= t < p["end"]), None)
+        upcoming = next((p for p in programmes if p["start"] > t), None)
+        stream_url = published.get(active["content_id"]) if active else None
+        source = playout(s, active, stream_url, current, upcoming, files, t) if visible else None
         view = {k: s.get(k) for k in ("id", "kind", "name", "description", "logo_url", "banner_url", "category", "channel_id")}
-        view.update({"on_air": bool(active), "live_content_id": active.get("content_id") if active else None,
-                     "live_title": active.get("title") if active else None, "programmes": programmes if private else programmes[:30],
+        view.update({"on_air": bool(active or source), "live_content_id": active.get("content_id") if active else None,
+                     "live_title": active.get("title") if active else (source or {}).get("title"), "programmes": programmes if private else programmes[:30],
+                     "playout": source, "as_of": t,
                      "now": next((p for p in programmes if p["start"] <= t < p["end"]), None),
                      "next": next((p for p in programmes if p["start"] > t), None)})
         if private:
             view.update({"owner_id": s["owner_id"], "hidden": bool(s.get("hidden")), "visible": visible,
-                         "moderation_reason": s.get("moderation_reason")})
+                         "moderation_reason": s.get("moderation_reason"), "automation_enabled": bool(s.get("automation_enabled")), "fallback_file_id": s.get("fallback_file_id")})
         result.append(view)
     return result
 
@@ -164,6 +207,10 @@ async def add_programme(station_id: str, body: ProgrammeIn, user=Depends(get_use
         raise HTTPException(403, "Your broadcasting permission is restricted")
     s = await _owned(station_id, user)
     p = programme(body)
+    if body.file_id:
+        if body.format != "prerecorded":
+            raise HTTPException(422, "Media can only be attached to a prerecorded programme")
+        await _check_file(body.file_id, s)
     items = [x for x in s.get("programmes", []) if x["end"] > now_iso()]
     if len(items) >= 100:
         raise HTTPException(409, "Maximum of 100 upcoming programmes")
@@ -173,6 +220,29 @@ async def add_programme(station_id: str, body: ProgrammeIn, user=Depends(get_use
     if not result.matched_count:
         raise HTTPException(409, "Schedule changed; refresh and retry")
     return p
+
+
+@router.get("/creator/stations/{station_id}/media")
+async def media_library(station_id: str, user=Depends(get_user)):
+    s = await _owned(station_id, user)
+    q = {"user_id": user["id"], "storage_path": {"$regex": "^uploads/"}, "is_deleted": False, "pending": {"$ne": True}, "protected": {"$ne": True}}
+    rows = await db.files.find(q, {"_id": 0, "id": 1, "user_id": 1, "storage_path": 1, "content_type": 1, "original_filename": 1}).sort("created_at", -1).to_list(500)
+    return [{"id": f["id"], "name": f.get("original_filename", "Media"), "content_type": f["content_type"]} for f in rows if eligible_file(f, s)]
+
+
+@router.put("/creator/stations/{station_id}/automation")
+async def configure_automation(station_id: str, body: AutomationIn, user=Depends(get_user)):
+    if user.get("broadcast_blocked"):
+        raise HTTPException(403, "Your broadcasting permission is restricted")
+    s = await _owned(station_id, user)
+    if body.fallback_file_id:
+        await _check_file(body.fallback_file_id, s)
+    fields = {"automation_enabled": body.enabled, "fallback_file_id": body.fallback_file_id}
+    if body.fallback_file_id != s.get("fallback_file_id") or not s.get("automation_anchor"):
+        fields["automation_anchor"] = now_iso()
+    await db.stations.update_one({"id": station_id, "owner_id": user["id"]}, {"$set": fields})
+    await audit("station_automation_changed", user, target=station_id, details={"enabled": body.enabled, "fallback": bool(body.fallback_file_id)})
+    return {"ok": True}
 
 
 @router.delete("/creator/stations/{station_id}/programmes/{programme_id}")
