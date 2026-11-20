@@ -48,6 +48,7 @@ async def list_ready() -> set[str]:
 async def monitor(stop: asyncio.Event):
     """Poll every 2 s; notify listeners when a live/* path becomes ready or not."""
     known: set[str] = set()
+    last_reconcile = 0.0
     while not stop.is_set():
         ready = {p for p in await list_ready() if p.startswith("live/") or (p.startswith("room/") and "/c/" in p)}
         for path in ready - known:
@@ -57,6 +58,15 @@ async def monitor(stop: asyncio.Event):
             for fn in listeners:
                 await _safe(fn, path, False)
         known = ready
+        if time.monotonic() - last_reconcile >= 15:
+            last_reconcile = time.monotonic()
+            # Recover waiting ABR sessions without making a viewer/creator GET
+            # request responsible for starting a worker.
+            from ..routers.broadcast import reconcile_adaptive_hls
+            try:
+                await asyncio.wait_for(reconcile_adaptive_hls(ready), timeout=8)
+            except Exception:
+                log.exception("adaptive HLS reconciliation failed")
         try:
             await asyncio.wait_for(stop.wait(), 2)
         except asyncio.TimeoutError:
