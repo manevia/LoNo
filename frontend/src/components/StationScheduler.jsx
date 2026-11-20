@@ -6,7 +6,7 @@ const btn = "rounded-full border border-white/15 px-4 py-2 text-sm hover:bg-whit
 const localDay = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 const time = date => date.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
 
-export function ProgrammeLibrary({ station, media, useMedia }) {
+export function ProgrammeLibrary({ station, media, onScheduleMedia }) {
   const [search,setSearch] = useState("");
   const [preview,setPreview] = useState(null);
   const selected = media.find(f=>f.id===preview);
@@ -15,7 +15,7 @@ export function ProgrammeLibrary({ station, media, useMedia }) {
     <div><h2 className="font-display text-xl">Programme media library</h2><p className="text-sm text-gray-400">{media.length} eligible {station.kind==="live_tv"?"video":"audio"} uploads. Use authorized media only.</p></div>
     <input aria-label="Search programme media" placeholder="Search media by filename" className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2" value={search} onChange={e=>setSearch(e.target.value)}/>
     {selected && <div className="space-y-2"><p className="text-sm">Preview: {selected.name}</p>{station.kind==="live_tv"?<video key={selected.id} className="max-h-64 w-full" controls preload="metadata" src={resolveMedia(selected.url)}/>:<audio key={selected.id} className="w-full" controls preload="metadata" src={resolveMedia(selected.url)}/>}<button className={btn} onClick={()=>setPreview(null)}>Close preview</button></div>}
-    {!items.length?<p className="text-sm text-gray-400">No matching media. Upload programme media above.</p>:<div className="max-h-72 overflow-auto divide-y divide-white/10">{items.map(f=><article key={f.id} className="py-3 flex flex-wrap items-center gap-2"><div className="flex-1 min-w-0"><p className="break-all font-medium">{f.name}</p><p className="text-xs text-gray-400">{f.content_type}{Number.isFinite(f.size)?` · ${(f.size/1048576).toFixed(2)} MB`:""}{station.fallback_file_id===f.id?" · Continuous fallback":""}</p></div><button className={btn} onClick={()=>setPreview(f.id)}>Preview</button><button className={btn} onClick={()=>useMedia(f)}>Schedule media</button></article>)}</div>}
+    {!items.length?<p className="text-sm text-gray-400">No matching media. Upload programme media above.</p>:<div className="max-h-72 overflow-auto divide-y divide-white/10">{items.map(f=><article key={f.id} className="py-3 flex flex-wrap items-center gap-2"><div className="flex-1 min-w-0"><p className="break-all font-medium">{f.name}</p><p className="text-xs text-gray-400">{f.content_type}{Number.isFinite(f.size)?` · ${(f.size/1048576).toFixed(2)} MB`:""}{station.fallback_file_id===f.id?" · Continuous fallback":""}</p></div><button className={btn} onClick={()=>setPreview(f.id)}>Preview</button><button className={btn} onClick={()=>onScheduleMedia(f)}>Schedule media</button></article>)}</div>}
   </section>;
 }
 
