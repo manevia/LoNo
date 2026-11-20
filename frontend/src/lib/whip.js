@@ -2,6 +2,13 @@
 // The offer goes to LoNo's API, which adds the creator's stream key server-side.
 import { api } from "@/lib/api";
 
+// Use the actual capture height so a lower-resolution camera consumes less
+// uplink bandwidth. WebRTC congestion control can still lower the bitrate.
+export function cameraBitrate(track) {
+  const h = track?.getSettings?.().height;
+  return h && h <= 360 ? 500_000 : h && h <= 480 ? 950_000 : 2_500_000;
+}
+
 function preferH264(pc) {
   // H.264 can be forwarded to social platforms without re-encoding.
   const caps = RTCRtpSender.getCapabilities?.("video");
@@ -28,7 +35,7 @@ export async function publishWhip({ video, audio, onState, endpoint = "/broadcas
   const pc = new RTCPeerConnection({ iceServers: [] });
   const senders = {};
   // Always reserve a video slot so audio-only senders can switch video back on without reconnecting.
-  senders.video = pc.addTransceiver(video || "video", { direction: "sendonly", sendEncodings: [{ maxBitrate: 2_500_000 }] }).sender;
+  senders.video = pc.addTransceiver(video || "video", { direction: "sendonly", sendEncodings: [{ maxBitrate: cameraBitrate(video) }] }).sender;
   if (audio) senders.audio = pc.addTransceiver(audio, { direction: "sendonly" }).sender;
   preferH264(pc);
   pc.addEventListener("connectionstatechange", () => onState?.(pc.connectionState));
@@ -43,7 +50,20 @@ export async function publishWhip({ video, audio, onState, endpoint = "/broadcas
   return {
     pc,
     /** Swap camera or mic while live, without reconnecting. */
-    async replace(kind, track) { if (senders[kind]) await senders[kind].replaceTrack(track); },
+    async replace(kind, track) {
+      const sender = senders[kind];
+      if (!sender) return;
+      await sender.replaceTrack(track);
+      if (kind === "video" && track) {
+        try {
+          const params = sender.getParameters();
+          if (params.encodings?.length) {
+            params.encodings[0].maxBitrate = cameraBitrate(track);
+            await sender.setParameters(params);
+          }
+        } catch { /* browser may restrict encoder parameter changes */ }
+      }
+    },
     async stats() {
       const report = await pc.getStats();
       let bytes = 0, lost = 0, sent = 0, rtt = null, ts = 0;
