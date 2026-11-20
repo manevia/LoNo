@@ -7,8 +7,8 @@ const isHls = (url) => /\.m3u8($|\?)/i.test(url || "");
 const chip = "inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-40";
 
 /**
- * Video/audio player with adaptive streaming (HLS via hls.js where the browser
- * lacks it natively), data-saver behaviour, a quality menu, lock-screen/TV-remote
+ * Video/audio player with adaptive streaming (HLS.js first where supported,
+ * native HLS otherwise), data-saver behaviour, a quality menu, lock-screen/TV-remote
  * controls (Media Session), picture-in-picture, casting and playback speed.
  */
 const MediaPlayer = forwardRef(function MediaPlayer(
@@ -34,54 +34,85 @@ const MediaPlayer = forwardRef(function MediaPlayer(
   const onFatalErrorRef = useRef(onFatalError); onFatalErrorRef.current = onFatalError;
   const onHlsRef = useRef(onHls); onHlsRef.current = onHls;
 
-  // Attach the source: native playback, or hls.js for .m3u8 where needed.
+  // Prefer MSE/HLS.js for playlists. Some desktop browsers report native HLS
+  // support but fail to demux live fragmented MP4 streams.
   useEffect(() => {
     const media = el.current;
     if (!media || !src) return;
     setLevels([]); setLevel(-1);
     let cancelled = false;
+    let retryTimer;
+    let usingHls = false;
     const fail = (msg) => { if (!cancelled) onFatalErrorRef.current?.(msg); };
-    const onMediaError = () => fail(media.error?.message || "This stream can't be played right now.");
+    const onMediaError = () => { if (!usingHls) fail(media.error?.message || "This stream can't be played right now."); };
     media.addEventListener("error", onMediaError);
     const nativeHls = media.canPlayType("application/vnd.apple.mpegurl");
-    if (!isHls(src) || nativeHls) {
+    const attachNative = () => {
+      if (cancelled) return;
       media.src = src;
       if (autoPlay) media.play().catch(() => {});
+    };
+    if (!isHls(src)) {
+      attachNative();
       return () => { cancelled = true; media.removeEventListener("error", onMediaError); media.removeAttribute("src"); media.load(); };
     }
     import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
-      if (!Hls.isSupported()) { media.src = src; return; }
+      if (!Hls.isSupported()) {
+        if (nativeHls) attachNative();
+        else fail("HLS playback isn't supported on this device.");
+        return;
+      }
       const hls = new Hls({
         capLevelToPlayerSize: true,          // never fetch more pixels than the screen shows
         startLevel: dataSaver ? 0 : -1,      // data saver starts at the lowest rendition
         maxBufferLength: dataSaver ? 15 : 30,
       });
+      usingHls = true;
       hlsRef.current = hls;
       onHlsRef.current?.(hls);
-      hls.loadSource(src);
-      hls.attachMedia(media);
+      let manifestRetries = 0;
+      let retries = 0;
       if (autoPlay) hls.on(Hls.Events.MANIFEST_PARSED, () => media.play().catch(() => {}));
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+        manifestRetries = 0;
         const list = data.levels.map((l, i) => ({ index: i, label: l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)} kbps` }));
         setLevels(list);
         if (dataSaver && list.length) { hls.autoLevelCapping = 0; }
       });
-      let retries = 0;
       hls.on(Hls.Events.ERROR, (_, d) => {
-        if (!d.fatal) return;
+        if (cancelled || !d.fatal) return;
         const manifest = /manifest/i.test(d.details || "");
-        if (d.type === Hls.ErrorTypes.NETWORK_ERROR && !manifest && retries++ < 2) hls.startLoad();
+        if (live && manifest && d.type === Hls.ErrorTypes.NETWORK_ERROR && manifestRetries < 5) {
+          // The converted stream may take several seconds to produce its first playlist.
+          if (retryTimer) return;
+          manifestRetries++;
+          retryTimer = setTimeout(() => {
+            retryTimer = undefined;
+            if (!cancelled) hls.loadSource(src);
+          }, Math.min(1000 * manifestRetries, 4000));
+        }
+        else if (d.type === Hls.ErrorTypes.NETWORK_ERROR && !manifest && retries++ < 2) hls.startLoad();
         else if (d.type === Hls.ErrorTypes.MEDIA_ERROR && retries++ < 2) hls.recoverMediaError();
         else fail(manifest ? "This channel isn't broadcasting right now." : "The stream stopped and couldn't reconnect.");
       });
-    }).catch(() => fail("The player couldn't load. Check your connection."));
+      hls.loadSource(src);
+      hls.attachMedia(media);
+    }).catch(() => {
+      if (cancelled) return;
+      hlsRef.current?.destroy(); hlsRef.current = null; onHlsRef.current?.(null);
+      usingHls = false;
+      if (nativeHls) attachNative();
+      else fail("The player couldn't load. Check your connection.");
+    });
     return () => {
       cancelled = true;
+      clearTimeout(retryTimer);
       media.removeEventListener("error", onMediaError);
       hlsRef.current?.destroy(); hlsRef.current = null; onHlsRef.current?.(null);
+      media.removeAttribute("src"); media.load();
     };
-  }, [src, dataSaver, autoPlay]);
+  }, [src, dataSaver, autoPlay, live]);
 
   // Lock screen, headphones, car and TV remote media keys.
   useEffect(() => {
