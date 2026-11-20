@@ -15,6 +15,12 @@ SID = "12345678-1234-1234-1234-123456789abc"
 
 
 class AdaptiveHlsTests(unittest.TestCase):
+    def test_capacity_gate(self):
+        with patch.dict("os.environ", {"MEDIA_ABR_MAX_SESSIONS": "1"}):
+            self.assertEqual(abr.capacity(1), (1, "Encoder capacity occupied"))
+        with patch.dict("os.environ", {"MEDIA_ABR_MAX_SESSIONS": "0"}):
+            self.assertEqual(abr.capacity(0), (0, "Encoder capacity occupied"))
+
     def test_asset_scope_and_readiness(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(config, "RECORDINGS_DIR", temp):
             root = abr.folder(SID)
