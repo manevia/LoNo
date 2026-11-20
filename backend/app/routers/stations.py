@@ -1,5 +1,6 @@
 """Permanent stations with clock-synchronised, viewer-side scheduled playout."""
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, uuid5
@@ -11,11 +12,16 @@ from pymongo.errors import DuplicateKeyError
 from ..audit import audit
 from ..db import db
 from ..security import get_admin, get_user
+from ..storage import storage
 from ..util import now, now_iso, uid
 from .creator import _channel_for
 
 router = APIRouter(tags=["stations"])
 Kind = Literal["live_tv", "live_radio"]
+STARTER_MEDIA = {
+    "6166455a-cc77-5c91-aa81-ec62d9da0b93": ("LoNo_TV_Opening_Ident.mp4", "video/mp4"),
+    "ff572199-4bc6-563f-bf37-cbe0708dae96": ("LoNo_Radio_Opening_Ident.mp3", "audio/mpeg"),
+}
 
 
 class StationIn(BaseModel):
@@ -150,7 +156,7 @@ async def _decorate(stations, *, private=False):
                      "next": next((p for p in programmes if p["start"] > t), None)})
         if private:
             view.update({"owner_id": s["owner_id"], "hidden": bool(s.get("hidden")), "visible": visible,
-                         "moderation_reason": s.get("moderation_reason"), "automation_enabled": bool(s.get("automation_enabled")), "fallback_file_id": s.get("fallback_file_id")})
+                         "moderation_reason": s.get("moderation_reason"), "automation_enabled": bool(s.get("automation_enabled")), "fallback_file_id": s.get("fallback_file_id"), "starter_available": s["id"] in STARTER_MEDIA})
         result.append(view)
     return result
 
@@ -243,6 +249,32 @@ async def configure_automation(station_id: str, body: AutomationIn, user=Depends
     await db.stations.update_one({"id": station_id, "owner_id": user["id"]}, {"$set": fields})
     await audit("station_automation_changed", user, target=station_id, details={"enabled": body.enabled, "fallback": bool(body.fallback_file_id)})
     return {"ok": True}
+
+
+@router.post("/creator/stations/{station_id}/starter-media")
+async def import_starter_media(station_id: str, user=Depends(get_user)):
+    """Copy the approved, bundled flagship ident into its owner's media library."""
+    s = await _owned(station_id, user)
+    if user.get("broadcast_blocked") or s.get("hidden"):
+        raise HTTPException(403, "Station broadcasting is restricted")
+    item = STARTER_MEDIA.get(station_id)
+    if not item:
+        raise HTTPException(404, "No starter media for this station")
+    filename, content_type = item
+    path = Path(__file__).resolve().parent.parent / "station_assets" / filename
+    if not path.is_file():
+        raise HTTPException(503, "Starter media is not installed")
+    existing = await db.files.find_one({"user_id": user["id"], "station_starter": station_id, "is_deleted": False, "pending": {"$ne": True}})
+    if eligible_file(existing, s) and await storage.exists(existing["storage_path"]):
+        return {"file_id": existing["id"]}
+    fid = uid()
+    key = f"uploads/{user['id']}/{fid}{path.suffix}"
+    data = path.read_bytes()
+    await storage.put(key, data, content_type)
+    await db.files.insert_one({"id": fid, "user_id": user["id"], "storage_path": key, "original_filename": filename,
+                               "content_type": content_type, "size": len(data), "is_deleted": False, "created_at": now_iso(), "station_starter": station_id})
+    await audit("station_starter_imported", user, target=station_id)
+    return {"file_id": fid}
 
 
 @router.delete("/creator/stations/{station_id}/programmes/{programme_id}")

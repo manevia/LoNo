@@ -45,6 +45,23 @@ def test_station_branding_validation(client, user):
     assert client.put(path, json={"name": "TV", "logo_url": "/api/files/uploads/another/unknown.png"}, headers=user["h"]).status_code == 422
 
 
+def test_import_flagship_ident(client, user, admin, monkeypatch):
+    from app.routers import stations
+    s = client.put("/api/creator/stations/live_radio", json={"name": "Opening station"}, headers=user["h"]).json()
+    sid = s["id"]
+    root = f"/api/creator/stations/{sid}"
+    assert client.post(root + "/starter-media", headers=user["h"]).status_code == 404
+    monkeypatch.setitem(stations.STARTER_MEDIA, sid, ("LoNo_Radio_Opening_Ident.mp3", "audio/mpeg"))
+    assert client.post(root + "/starter-media", headers=admin["h"]).status_code == 404
+    result = client.post(root + "/starter-media", headers=user["h"])
+    assert result.status_code == 200, result.text
+    fid = result.json()["file_id"]
+    assert client.post(root + "/starter-media", headers=user["h"]).json()["file_id"] == fid
+    assert any(f["id"] == fid for f in client.get(root + "/media", headers=user["h"]).json())
+    assert client.put(root + "/automation", headers=user["h"], json={"enabled": True, "fallback_file_id": fid}).status_code == 200
+    assert client.get(f"/api/stations/{sid}").json()["playout"]["mode"] == "fallback"
+
+
 def test_station_tracks_live_session_and_real_guide(client, user, media_on):
     h = user["h"]
     station = client.put("/api/creator/stations/live_tv", json={"name": "Network TV"}, headers=h).json()
