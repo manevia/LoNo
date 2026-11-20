@@ -4,6 +4,26 @@ def test_health_and_config(client):
     assert cfg["ai"] is False and cfg["payments"] is False and cfg["storage"] == "local"
 
 
+def test_health_unavailable_database(client, monkeypatch):
+    from app import main
+    from pymongo.errors import ConnectionFailure
+    from unittest.mock import AsyncMock
+
+    database = AsyncMock()
+    database.command.side_effect = ConnectionFailure("database offline")
+    monkeypatch.setattr(main, "client", type("Client", (), {"admin": database})())
+    assert client.get("/api/health").status_code == 503
+
+
+def test_checkout_requires_webhook(client, user, monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config, "STRIPE_API_KEY", "test-key")
+    monkeypatch.setattr(config, "STRIPE_WEBHOOK_SECRET", "")
+    assert client.get("/api/config").json()["payments"] is False
+    assert client.post("/api/payments/checkout", json={"plan": "premium"}, headers=user["h"]).status_code == 503
+
+
 def test_catalogue_seeded(client):
     items = client.get("/api/content", params={"limit": 200}).json()
     assert len(items) >= 29

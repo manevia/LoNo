@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 import dns.exception
 import dns.resolver
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
 from pymongo.errors import ConfigurationError, ConnectionFailure, OperationFailure
 from starlette.middleware.cors import CORSMiddleware
 
@@ -150,6 +150,10 @@ async def root():
 
 @api.get("/health")
 async def health():
+    try:
+        await asyncio.wait_for(client.admin.command("ping"), timeout=4)
+    except (ConnectionFailure, ConfigurationError, OperationFailure, TimeoutError):
+        raise HTTPException(503, "Database unavailable") from None
     return {"status": "healthy", "time": now_iso()}
 
 

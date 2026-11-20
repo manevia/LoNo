@@ -9,7 +9,8 @@ import { writeFileSync } from "node:fs";
 
 const out = {};
 const fromEnv = { MONGO_URL: "MONGO_URL", AWS_ACCESS_KEY_ID: "R2_ACCESS_KEY_ID", AWS_SECRET_ACCESS_KEY: "R2_SECRET_ACCESS_KEY",
-                  ADMIN_PASSWORD: "ADMIN_PASSWORD", ANTHROPIC_API_KEY: "ANTHROPIC_API_KEY", GOOGLE_CLIENT_ID: "GOOGLE_CLIENT_ID" };
+                  ADMIN_PASSWORD: "ADMIN_PASSWORD", ANTHROPIC_API_KEY: "ANTHROPIC_API_KEY", GOOGLE_CLIENT_ID: "GOOGLE_CLIENT_ID",
+                  STRIPE_API_KEY: "STRIPE_API_KEY", STRIPE_WEBHOOK_SECRET: "STRIPE_WEBHOOK_SECRET" };
 for (const [name, envName] of Object.entries(fromEnv)) {
   if (process.env[envName]) out[name] = process.env[envName];
 }
