@@ -76,6 +76,11 @@ services:
       MTX_HLSADDRESS: ':8888'
       MTX_RTSPADDRESS: ':8554'
       MTX_WEBRTCADDITIONALHOSTS: ${LIVE_HOST:-live.lono.ciu.edu.lr}
+      MTX_WEBRTCLOCALUDPADDRESS: ':18189'
+      MTX_WEBRTCLOCALTCPADDRESS: ':18189'
+    ports:
+      - '18189:18189/udp'
+      - '18189:18189/tcp'
 
 volumes:
   lono-data:
