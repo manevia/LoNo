@@ -36,6 +36,29 @@ def test_broadcasting_off_by_default(client):
     assert r.status_code == 503
 
 
+def test_admin_management_center(client, admin, user, media_on):
+    path = "/api/admin/broadcasts"
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers=user["h"]).status_code == 403
+    s = client.post("/api/broadcast/sessions", headers=user["h"], json={"title": "Admin test", "test": True}).json()
+    data = client.get(path, headers=admin["h"]).json()
+    item = next(r for r in data["active"] if r["id"] == s["id"])
+    assert item["feed"]["ready"] and "ingest_id" not in item and "preview_url" not in item
+    assert item["watch_starts"] is None
+    endpoint = f"{path}/{s['id']}/end"
+    assert client.post(endpoint, headers=user["h"], json={"reason": "test"}).status_code == 403
+    assert client.post(endpoint, headers=admin["h"], json={"reason": "private test cleanup"}).status_code == 200
+    history = client.get(path, headers=admin["h"]).json()["history"]
+    assert next(r for r in history if r["id"] == s["id"])["moderation_reason"] == "private test cleanup"
+    permission = f"/api/admin/users/{user['id']}/broadcast-permission"
+    body = {"blocked": True, "reason": "test restriction"}
+    assert client.post(permission, headers=user["h"], json=body).status_code == 403
+    assert client.post(permission, headers=admin["h"], json=body).status_code == 200
+    assert client.post("/api/broadcast/sessions", headers=user["h"], json={"title": "Blocked"}).status_code == 403
+    assert client.post(permission, headers=admin["h"], json={**body, "blocked": False}).status_code == 200
+    assert client.post("/api/broadcast/sessions", headers=user["h"], json={"title": "Restored", "test": True}).status_code == 200
+
+
 def test_ingest_key_rotation_and_auth_callback(client, media_on):
     u = make_user(client)
     ing = client.get("/api/broadcast/ingest", headers=u["h"]).json()
