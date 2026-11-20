@@ -36,6 +36,7 @@ router = APIRouter(prefix="/broadcast", tags=["broadcast"])
 media_router = APIRouter(tags=["broadcast"])          # /media/hls/... (not under /api)
 ACTIVE = ("created", "live")
 INTERNAL_USER = "lono-internal"
+_abr_attempt_at: dict[str, float] = {}
 
 
 # ---------------------------------------------------------------- helpers
@@ -111,7 +112,7 @@ async def ensure_media_path(s: dict) -> str:
 
 
 async def _start_adaptive_hls(s: dict, path: str):
-    """At most one additional encoder per server; failure never gates ingest."""
+    """Admit an additional encoder only when resources permit."""
     if not abr.enabled() or s.get("kind") != "live_tv":
         return
     info = await media.path_info(path) or {}
@@ -120,10 +121,13 @@ async def _start_adaptive_hls(s: dict, path: str):
     # Session may have been ended while waiting for the canonical feed.
     if not await db.broadcast_sessions.find_one({"id": s["id"], "status": {"$in": list(ACTIVE)}}):
         return
-    running = {sid for (sid, target), relay in manager.relays.items()
-               if target == abr.TARGET and relay.state in ("idle", "connecting", "live", "retrying")}
-    if running:
+    running = _adaptive_running()
+    if s["id"] in running or abr.capacity(len(running))[1]:
         return
+    prior = manager.get(s["id"]).get(abr.TARGET) or {}
+    if prior.get("attempts", 0) >= 3 or time.monotonic() - _abr_attempt_at.get(s["id"], -60) < 30:
+        return
+    _abr_attempt_at[s["id"]] = time.monotonic()
     try:
         output = abr.folder(s["id"])
         abr.cleanup(s["id"])
@@ -134,6 +138,36 @@ async def _start_adaptive_hls(s: dict, path: str):
     except (OSError, ValueError):
         # Adaptive playback is optional; the existing MediaMTX stream remains available.
         return
+
+
+def _adaptive_running():
+    return {sid for (sid, target), relay in manager.relays.items()
+            if target == abr.TARGET and relay.state in ("idle", "connecting", "live", "retrying")}
+
+
+async def reconcile_adaptive_hls(ready_paths: set[str]):
+    """Admit waiting broadcasts when a slot frees, with a bounded retry budget."""
+    if not abr.enabled() or abr.capacity(len(_adaptive_running()))[1]:
+        return
+    async for s in db.broadcast_sessions.find({"status": {"$in": list(ACTIVE)}, "kind": "live_tv"}).sort("created_at", 1).limit(20):
+        if f"live/{s['ingest_id']}" not in ready_paths or not s.get("media_path"):
+            continue
+        await _start_adaptive_hls(s, s["media_path"])
+        if abr.capacity(len(_adaptive_running()))[1]:
+            break
+
+
+def _adaptive_status(s: dict, relays: dict):
+    running = _adaptive_running()
+    limit, reason = abr.capacity(len(running)) if abr.enabled() else (0, None)
+    relay = relays.get(abr.TARGET) or {}
+    ready = bool(relay.get("state") == "live" and abr.ready_master(s["id"]))
+    eligible = abr.enabled() and s.get("kind") == "live_tv"
+    state = ("disabled" if not eligible else "ready" if ready else "starting" if s["id"] in running
+             else "fallback" if relay.get("state") == "failed" else "waiting" if reason else "pending")
+    return {"state": state, "ready": ready, "renditions": [h for h, _, _ in abr.PROFILES] if ready else [],
+            "active_encoders": len(running), "encoder_limit": limit,
+            "reason": reason if state == "waiting" else None, "attempts": relay.get("attempts", 0)}
 
 
 def _codec_args(tracks: list[str] | None) -> list[str]:
@@ -187,6 +221,7 @@ async def _session_view(s: dict) -> dict:
         "feed": {**(feed or {"ready": False}), "converted": (s.get("media_path") or "").startswith("tx/")},
         "destinations": dests,
         "recorder": relays.get("recorder"),
+        "adaptive": _adaptive_status(s, relays),
         "preview_url": f"/media/hls/t/{token}/{s['ingest_id']}/index.m3u8",
         "public_url": f"/media/hls/{s['ingest_id']}/index.m3u8" if s.get("visibility") == "public" else None,
         "ingest": {"key_hint": ing["key_hint"]} if ing else None,
@@ -387,6 +422,7 @@ async def stop_session_for(user, session_id: str) -> dict:
     if s["status"] == "ended":
         return s                                    # stopping twice is safe
     await manager.stop(s["id"])
+    _abr_attempt_at.pop(s["id"], None)
     if abr.enabled():
         abr.cleanup(s["id"])
     if s.get("content_id"):
@@ -670,8 +706,8 @@ async def hls_proxy(rest: str):
         try:
             state = (manager.get(s["id"]).get(abr.TARGET) or {}).get("state")
             if file == "index.m3u8" and state == "live":
-                adaptive = abr.master(s["id"])
-                if adaptive and time.time() - adaptive.stat().st_mtime < 15:
+                adaptive = abr.ready_master(s["id"])
+                if adaptive:
                     return FileResponse(adaptive, media_type="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-store"})
             if file.startswith("abr_"):
                 asset = abr.asset(s["id"], file)
