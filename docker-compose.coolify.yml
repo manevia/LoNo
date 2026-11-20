@@ -38,6 +38,7 @@ services:
       RECORDINGS_DIR: /app/data/recordings
       MAX_UPLOAD_MB: '4096'
       MEDIA_ENABLED: ${MEDIA_ENABLED:-false}
+      MEDIA_ABR_ENABLED: ${MEDIA_ABR_ENABLED:-true}
       MEDIA_API_URL: http://media:9997
       MEDIA_HLS_URL: http://media:8888
       MEDIA_WEBRTC_URL: http://media:8889
