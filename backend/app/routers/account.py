@@ -85,6 +85,7 @@ async def _collect(user_id: str) -> dict:
         "uploaded_files": await db.files.find({"user_id": user_id}, no_id).to_list(10000),
         "channel": channel,
         "channel_content": content,
+        "stations": await db.stations.find({"owner_id": user_id}, no_id).to_list(2),
         "courses_created": await db.courses.find({"owner_id": user_id}, no_id).to_list(1000),
     }
 
@@ -112,6 +113,7 @@ async def delete_account(body: DeleteIn, user=Depends(get_user)):
     if channel:
         await db.content.delete_many({"channel_id": channel["id"]})
         await db.channels.delete_one({"id": channel["id"]})
+    await db.stations.delete_many({"owner_id": uid_})
     async for c in db.courses.find({"owner_id": uid_}, {"id": 1}):
         await db.enrollments.delete_many({"course_id": c["id"]})
         await db.reviews.delete_many({"course_id": c["id"]})
