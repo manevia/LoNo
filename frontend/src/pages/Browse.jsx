@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import ContentCard from "@/components/ContentCard";
+import FilmLibrary from "@/components/FilmLibrary";
 import { Loader2 } from "lucide-react";
 
 const LABELS = {
@@ -15,6 +16,7 @@ export default function Browse() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if(kind==="movie")return;
     (async () => {
       setLoading(true);
       try {
@@ -23,6 +25,8 @@ export default function Browse() {
       } finally { setLoading(false); }
     })();
   }, [kind]);
+
+  if(kind==="movie")return <FilmLibrary/>;
 
   return (
     <div data-testid="browse-page" className="max-w-[1600px] mx-auto px-4 md:px-8 pt-8 pb-24">

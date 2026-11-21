@@ -7,6 +7,7 @@ import useWatchSession from "@/lib/useWatchSession";
 import { Loader2, Share2, Plus, Check, ThumbsUp, Sparkles, Coins, Captions, GraduationCap, Star } from "lucide-react";
 import { toast } from "sonner";
 import ContentCard from "@/components/ContentCard";
+import FilmDetails from "@/components/FilmDetails";
 import MediaPlayer from "@/components/MediaPlayer";
 import TvVodPlayer from "@/components/tv/TvVodPlayer";
 import { usePrefs } from "@/lib/device";
@@ -193,6 +194,7 @@ export default function Watch() {
           </div>
 
           <p className="mt-6 text-gray-300 leading-relaxed max-w-3xl">{item.description}</p>
+          {item.kind==="movie"&&<FilmDetails key={item.id} item={item}/>}
 
           {item.course_id && (
             <Link to={`/learn/${item.course_id}`} data-testid="course-link"

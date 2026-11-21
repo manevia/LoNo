@@ -109,7 +109,7 @@ async def download(path: str, request: Request, exp: int | None = None, sig: str
     if rec.get("editorial_id"):
         from ..broadcast.secrets_box import verify
         import time
-        public=await db.content.find_one({"id":rec["editorial_id"],"editorial_id":rec["editorial_id"],"$or":[{"stream_url":f"/api/files/{path}"},{"thumbnail_url":f"/api/files/{path}"}]},{"id":1})
+        public=await db.content.find_one({"id":rec["editorial_id"],"editorial_id":rec["editorial_id"],"$or":[{"stream_url":f"/api/files/{path}"},{"thumbnail_url":f"/api/files/{path}"},{"trailer_url":f"/api/files/{path}"}]},{"id":1})
         if not public and not (exp and sig and exp>time.time() and verify(path,sig,str(exp))):
             raise HTTPException(403,"Editorial media is private")
         response=await storage.serve(path,rec["content_type"],request,ttl=300)

@@ -23,6 +23,24 @@ moderation=APIRouter(prefix="/admin/editorial",tags=["editorial moderation"])
 MEDIA={"video/mp4":"mp4","video/webm":"webm","audio/mpeg":"mp3","audio/mp4":"m4a","audio/ogg":"ogg","audio/wav":"wav","audio/webm":"webm","image/jpeg":"jpg","image/png":"png","image/webp":"webp"}
 
 
+class FilmCredit(BaseModel):
+    name:str=Field(min_length=1,max_length=100)
+    role:str=Field(min_length=1,max_length=80)
+
+
+class FilmIn(BaseModel):
+    format:Literal["feature","documentary","short_film"]="feature"
+    genres:list[str]=Field(default_factory=list,max_length=8)
+    credits:list[FilmCredit]=Field(default_factory=list,max_length=30)
+    release_year:int|None=Field(default=None,ge=1888,le=2100)
+    runtime_minutes:int|None=Field(default=None,ge=1,le=1440)
+    maturity:Literal["unrated","general","parental_guidance","13_plus","16_plus","18_plus"]="unrated"
+    country:str=Field(default="",max_length=80)
+    language:str=Field(default="",max_length=80)
+    collection:str=Field(default="",max_length=100)
+    trailer_id:str|None=None
+
+
 class DraftIn(BaseModel):
     title:str=Field(min_length=2,max_length=140)
     description:str=Field(default="",max_length=4000)
@@ -30,6 +48,7 @@ class DraftIn(BaseModel):
     kind:Literal["movie","series","short","music","podcast"]="short"
     media_id:str|None=None
     thumbnail_id:str|None=None
+    film:FilmIn|None=None
     revision:int=Field(default=0,ge=0)
 
 
@@ -72,6 +91,14 @@ async def _metadata(d,body):
     if data["media_id"]:
         f=await _asset(d,data["media_id"],"audio/" if body.kind in ("music","podcast") else "video/")
     if data["thumbnail_id"]:await _asset(d,data["thumbnail_id"],"image/")
+    if body.film:
+        if body.kind!="movie":raise HTTPException(422,"Film metadata is only for movies and documentaries")
+        data["film"]["genres"]=list(dict.fromkeys(g.strip() for g in body.film.genres if g.strip()))
+        if any(len(g)>60 for g in data["film"]["genres"]):raise HTTPException(422,"Genre names must be 60 characters or fewer")
+        if any(not c.name.strip() or not c.role.strip() for c in body.film.credits):raise HTTPException(422,"Enter a name and role for each credit")
+        if body.film.trailer_id:await _asset(d,body.film.trailer_id,"video/")
+    elif body.kind=="movie":
+        data["film"]=FilmIn().model_dump()
     return data
 
 
@@ -204,11 +231,19 @@ async def process_release(d):
     try:
         f=await _asset(d,m["media_id"],"audio/" if m["kind"] in ("music","podcast") else "video/")
         image=await _asset(d,m.get("thumbnail_id"),"image/")
+        trailer=await _asset(d,(m.get("film") or {}).get("trailer_id"),"video/")
         if not f or not await storage.exists(f["storage_path"]) or (image and not await storage.exists(image["storage_path"])):raise HTTPException(422,"Media missing")
+        if trailer and not await storage.exists(trailer["storage_path"]):raise HTTPException(422,"Trailer missing")
     except HTTPException:
         await _change(d,{"status":"changes_requested"},"publication_blocked","system","Media missing or invalid");return
     old=d.get("published_snapshot") or {}
     content={"id":d["id"],"editorial_id":d["id"],"channel_id":d["channel_id"],"title":m["title"],"description":m["description"],"category":m["category"],"kind":m["kind"],"stream_url":"/api/files/"+f["storage_path"],"thumbnail_url":"/api/files/"+image["storage_path"] if image else "", "duration_sec":0,"views":old.get("views",0),"likes":old.get("likes",0),"rating":old.get("rating"),"year":now().year,"created_at":old.get("created_at") or now_iso()}
+    if m["kind"]=="movie":
+        film={**(m.get("film") or FilmIn().model_dump())};film.pop("trailer_id",None)
+        content["film"]=film
+        if trailer:content["trailer_url"]="/api/files/"+trailer["storage_path"]
+        if film.get("release_year"):content["year"]=film["release_year"]
+        if film.get("runtime_minutes"):content["duration_sec"]=film["runtime_minutes"]*60
     try:await db.content.update_one({"id":d["id"],"editorial_id":d["id"]},{"$setOnInsert":content},upsert=True)
     except DuplicateKeyError:raise HTTPException(409,"Publication ID conflict")
     await _change(d,{"status":"published","published_at":now_iso()},"published","system")

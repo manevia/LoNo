@@ -3,12 +3,33 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from typing import Literal
 
 from ..db import db
 from ..security import get_user, get_user_optional
 
 router = APIRouter(tags=["content"])
 P = {"_id": 0, "subtitles_vtt": 0, "transcript": 0}
+
+
+@router.get("/films")
+async def films(format:Literal["all","feature","documentary","short_film"]="all", genre:str="", collection:str="", sort:Literal["newest","popular","rating"]="newest", offset:int=0):
+    q={"kind":"movie"}
+    if format=="feature":q["$or"]=[{"film.format":"feature"},{"film.format":{"$exists":False}}]
+    elif format!="all":q["film.format"]=format
+    if genre:q["$and"]=[{"$or":[{"film.genres":genre},{"category":genre}]}]
+    if collection:q["film.collection"]=collection
+    field={"newest":"created_at","popular":"views","rating":"rating"}[sort]
+    rows=await db.content.find(q,P).sort([(field,-1),("id",1)]).skip(max(0,offset)).limit(100).to_list(100)
+    for row in rows:
+        if row.get("gated"):
+            row.pop("stream_url",None)
+            row.pop("media_prefix",None)
+    # Facets derive solely from published movie rows, including legacy movies.
+    sample=await db.content.find({"kind":"movie"},{"_id":0,"category":1,"film":1}).limit(1000).to_list(1000)
+    genres=sorted({g for c in sample for g in ((c.get("film") or {}).get("genres") or [c.get("category")]) if g})
+    collections=sorted({(c.get("film") or {}).get("collection") for c in sample if (c.get("film") or {}).get("collection")})
+    return {"items":rows,"genres":genres,"collections":collections,"has_more":len(rows)==100}
 
 
 @router.get("/content")
