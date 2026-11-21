@@ -17,12 +17,12 @@ from urllib.parse import parse_qs
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .. import config
 from ..audit import audit
-from ..broadcast import media
+from ..broadcast import abr, media
 from ..broadcast.platforms import BY_ID, PLATFORMS, target_url
 from ..broadcast.relays import manager
 from ..broadcast.secrets_box import decrypt, encrypt, hash_key, hint, new_stream_key, redact, sign, verify
@@ -36,6 +36,7 @@ router = APIRouter(prefix="/broadcast", tags=["broadcast"])
 media_router = APIRouter(tags=["broadcast"])          # /media/hls/... (not under /api)
 ACTIVE = ("created", "live")
 INTERNAL_USER = "lono-internal"
+_abr_attempt_at: dict[str, float] = {}
 
 
 # ---------------------------------------------------------------- helpers
@@ -106,7 +107,67 @@ async def ensure_media_path(s: dict) -> str:
     if s.get("media_path") != path:
         await db.broadcast_sessions.update_one({"id": s["id"]}, {"$set": {"media_path": path}})
         s["media_path"] = path
+    await _start_adaptive_hls(s, path)
     return path
+
+
+async def _start_adaptive_hls(s: dict, path: str):
+    """Admit an additional encoder only when resources permit."""
+    if not abr.enabled() or s.get("kind") != "live_tv":
+        return
+    info = await media.path_info(path) or {}
+    if not info.get("ready") or not info.get("has_video"):
+        return
+    # Session may have been ended while waiting for the canonical feed.
+    if not await db.broadcast_sessions.find_one({"id": s["id"], "status": {"$in": list(ACTIVE)}}):
+        return
+    running = _adaptive_running()
+    if s["id"] in running or abr.capacity(len(running))[1]:
+        return
+    prior = manager.get(s["id"]).get(abr.TARGET) or {}
+    if prior.get("attempts", 0) >= 3 or time.monotonic() - _abr_attempt_at.get(s["id"], -60) < 30:
+        return
+    _abr_attempt_at[s["id"]] = time.monotonic()
+    try:
+        output = abr.folder(s["id"])
+        abr.cleanup(s["id"])
+        output.mkdir(parents=True, exist_ok=True)
+        await manager.start(s["id"], abr.TARGET,
+                            abr.args(_internal_src(s["ingest_id"], path), output, bool(info.get("has_audio")), rtsp=False),
+                            (config.MEDIA_INTERNAL_SECRET,))
+    except (OSError, ValueError):
+        # Adaptive playback is optional; the existing MediaMTX stream remains available.
+        return
+
+
+def _adaptive_running():
+    return {sid for (sid, target), relay in manager.relays.items()
+            if target == abr.TARGET and relay.state in ("idle", "connecting", "live", "retrying")}
+
+
+async def reconcile_adaptive_hls(ready_paths: set[str]):
+    """Admit waiting broadcasts when a slot frees, with a bounded retry budget."""
+    if not abr.enabled() or abr.capacity(len(_adaptive_running()))[1]:
+        return
+    async for s in db.broadcast_sessions.find({"status": {"$in": list(ACTIVE)}, "kind": "live_tv"}).sort("created_at", 1).limit(20):
+        if f"live/{s['ingest_id']}" not in ready_paths or not s.get("media_path"):
+            continue
+        await _start_adaptive_hls(s, s["media_path"])
+        if abr.capacity(len(_adaptive_running()))[1]:
+            break
+
+
+def _adaptive_status(s: dict, relays: dict):
+    running = _adaptive_running()
+    limit, reason = abr.capacity(len(running)) if abr.enabled() else (0, None)
+    relay = relays.get(abr.TARGET) or {}
+    ready = bool(relay.get("state") == "live" and abr.ready_master(s["id"]))
+    eligible = abr.enabled() and s.get("kind") == "live_tv"
+    state = ("disabled" if not eligible else "ready" if ready else "starting" if s["id"] in running
+             else "fallback" if relay.get("state") == "failed" else "waiting" if reason else "pending")
+    return {"state": state, "ready": ready, "renditions": [h for h, _, _ in abr.PROFILES] if ready else [],
+            "active_encoders": len(running), "encoder_limit": limit,
+            "reason": reason if state == "waiting" else None, "attempts": relay.get("attempts", 0)}
 
 
 def _codec_args(tracks: list[str] | None) -> list[str]:
@@ -160,6 +221,7 @@ async def _session_view(s: dict) -> dict:
         "feed": {**(feed or {"ready": False}), "converted": (s.get("media_path") or "").startswith("tx/")},
         "destinations": dests,
         "recorder": relays.get("recorder"),
+        "adaptive": _adaptive_status(s, relays),
         "preview_url": f"/media/hls/t/{token}/{s['ingest_id']}/index.m3u8",
         "public_url": f"/media/hls/{s['ingest_id']}/index.m3u8" if s.get("visibility") == "public" else None,
         "ingest": {"key_hint": ing["key_hint"]} if ing else None,
@@ -269,6 +331,8 @@ class SessionIn(BaseModel):
 
 async def create_session_for(user, body: SessionIn, idempotency_key: str | None = None) -> dict:
     _require_media()
+    if user.get("broadcast_blocked"):
+        raise HTTPException(403, "Your broadcasting permission is restricted. Contact LoNo support.")
     if idempotency_key:
         prev = await db.broadcast_sessions.find_one({"owner_id": user["id"], "idempotency_key": idempotency_key}, {"_id": 0})
         if prev:
@@ -323,6 +387,8 @@ async def get_session(session_id: str, user=Depends(get_user)):
 
 async def start_session_for(user, session_id: str) -> dict:
     _require_media()
+    if user.get("broadcast_blocked"):
+        raise HTTPException(403, "Your broadcasting permission is restricted. Contact LoNo support.")
     s = await _session(session_id, user)
     if s["status"] == "live":
         return s                                    # starting twice is safe
@@ -360,9 +426,12 @@ async def stop_session_for(user, session_id: str) -> dict:
     if s["status"] == "ended":
         return s                                    # stopping twice is safe
     await manager.stop(s["id"])
+    _abr_attempt_at.pop(s["id"], None)
+    if abr.enabled():
+        abr.cleanup(s["id"])
     if s.get("content_id"):
         await db.content.delete_one({"id": s["content_id"]})
-    await db.broadcast_sessions.update_one({"id": s["id"]}, {"$set": {"status": "ended", "ended_at": now_iso(), "content_id": None}})
+    await db.broadcast_sessions.update_one({"id": s["id"]}, {"$set": {"status": "ended", "ended_at": now_iso(), "last_content_id": s.get("content_id"), "content_id": None}})
     s = await _session(session_id, user)
     await _event(s, "broadcast.ended", title=s["title"])
     if s.get("record") and s.get("started_at"):
@@ -408,6 +477,8 @@ async def whip_publish(request: Request, user=Depends(get_user)):
     """Creator Studio sends its WebRTC offer here; LoNo forwards it to the media
     server with the creator's stream key, so the key never reaches the browser."""
     _require_media()
+    if user.get("broadcast_blocked"):
+        raise HTTPException(403, "Your broadcasting permission is restricted. Contact LoNo support.")
     s = await db.broadcast_sessions.find_one({"owner_id": user["id"], "status": {"$in": list(ACTIVE)}}, {"_id": 0})
     if not s:
         raise HTTPException(409, "Create a test or live session first")
@@ -487,6 +558,8 @@ class PublishIn(BaseModel):
 
 
 async def _publish_recording(rec: dict):
+    if not await db.recordings.find_one({"id": rec["id"], "moderation_hold": {"$ne": True}}):
+        return
     s = await db.broadcast_sessions.find_one({"id": rec["session_id"]}) or {}
     owner = await db.users.find_one({"id": rec["owner_id"]})
     ch = await _channel_for(owner) if owner else {}
@@ -497,7 +570,9 @@ async def _publish_recording(rec: dict):
                "channel_id": ch.get("id"), "views": 0, "likes": 0, "rating": None, "year": now().year,
                "created_at": now_iso(), "recording_id": rec["id"]}
     await db.content.insert_one(dict(content))
-    await db.recordings.update_one({"id": rec["id"]}, {"$set": {"visibility": "public", "content_id": content["id"], "publish_at": None}})
+    result = await db.recordings.update_one({"id": rec["id"], "moderation_hold": {"$ne": True}}, {"$set": {"visibility": "public", "content_id": content["id"], "publish_at": None}})
+    if not result.matched_count:
+        await db.content.delete_one({"id": content["id"]})
 
 
 def signed_download(rec: dict, ttl: int = 3600) -> dict:
@@ -522,6 +597,8 @@ async def publish_recording(rec_id: str, body: PublishIn, user=Depends(get_user)
         raise HTTPException(404, "Recording not found")
     if rec["status"] != "ready":
         raise HTTPException(409, "The recording isn't ready yet")
+    if rec.get("moderation_hold") and body.when != "private":
+        raise HTTPException(403, "This recording is under moderation review.")
     if body.title:
         await db.recordings.update_one({"id": rec_id}, {"$set": {"title": body.title.strip()}})
         rec["title"] = body.title.strip()
@@ -539,13 +616,15 @@ async def publish_recording(rec_id: str, body: PublishIn, user=Depends(get_user)
             raise HTTPException(422, "Give a valid date and time to publish")
         if when.tzinfo is None:
             raise HTTPException(422, "Include a time zone in the publish time")
-        await db.recordings.update_one({"id": rec_id}, {"$set": {"visibility": "scheduled", "publish_at": when.isoformat()}})
+        result = await db.recordings.update_one({"id": rec_id, "moderation_hold": {"$ne": True}}, {"$set": {"visibility": "scheduled", "publish_at": when.isoformat()}})
+        if not result.matched_count:
+            raise HTTPException(403, "This recording is under moderation review.")
     await audit(f"recording_{body.when}", user, target=rec_id)
     return await db.recordings.find_one({"id": rec_id}, {"_id": 0})
 
 
 async def publish_due_recordings():
-    async for rec in db.recordings.find({"visibility": "scheduled", "publish_at": {"$lte": now_iso()}}, {"_id": 0}):
+    async for rec in db.recordings.find({"visibility": "scheduled", "publish_at": {"$lte": now_iso()}, "moderation_hold": {"$ne": True}}, {"_id": 0}):
         await _publish_recording(rec)
 
 
@@ -577,8 +656,8 @@ async def mtx_auth(request: Request):
         key = password or (parse_qs(b.get("query") or "").get("key") or [""])[0]
         ing = await db.ingests.find_one({"id": path.split("/", 1)[1]})
         if ing and key and secrets.compare_digest(hash_key(key), ing["key_hash"]):
-            owner = await db.users.find_one({"id": ing["owner_id"]}, {"suspended": 1})
-            if owner and not owner.get("suspended"):
+            owner = await db.users.find_one({"id": ing["owner_id"]}, {"suspended": 1, "broadcast_blocked": 1})
+            if owner and not owner.get("suspended") and not owner.get("broadcast_blocked"):
                 return Response(status_code=204)
     raise HTTPException(401)
 
@@ -594,6 +673,9 @@ async def on_feed_change(path: str, ready: bool):
     await _event(s, "stream.connected" if ready else "stream.disconnected")
     if ready and s["status"] != "live":
         await ensure_media_path(s)       # private test preview (converts browser codecs if needed)
+    if not ready and abr.enabled():
+        await manager.stop(s["id"], abr.TARGET)
+        abr.cleanup(s["id"])
     if s["status"] == "live":
         if ready:
             await _start_targets(s)      # restart destinations and start a new recording part
@@ -631,6 +713,25 @@ async def hls_proxy(rest: str):
         raise HTTPException(404, "This stream isn't live")
     if not re.fullmatch(r"[\w.\-/]+", file) or ".." in file:
         raise HTTPException(400)
+    # Adaptive assets use the *same* authorization as the original stream.
+    # The names are deliberately disjoint from MediaMTX's files; established
+    # single-stream clients can keep playing while the ladder becomes ready.
+    if abr.enabled() and s.get("kind") == "live_tv":
+        try:
+            state = (manager.get(s["id"]).get(abr.TARGET) or {}).get("state")
+            if file == "index.m3u8" and state == "live":
+                adaptive = abr.ready_master(s["id"])
+                if adaptive:
+                    return FileResponse(adaptive, media_type="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-store"})
+            if file.startswith("abr_"):
+                asset = abr.asset(s["id"], file)
+                if not asset:
+                    raise HTTPException(404, "This adaptive segment is not available")
+                return FileResponse(asset, media_type="application/vnd.apple.mpegurl" if file.endswith(".m3u8") else "video/mp2t",
+                                    headers={"Cache-Control": "no-store"})
+        except (OSError, ValueError):
+            if file.startswith("abr_"):
+                raise HTTPException(404, "This adaptive segment is not available")
     url = f"{config.MEDIA_HLS_URL}/{s.get('media_path') or 'live/' + ingest_id}/{file}"
     client = httpx.AsyncClient(timeout=20, auth=(INTERNAL_USER, config.MEDIA_INTERNAL_SECRET))
     try:

@@ -9,13 +9,13 @@ from urllib.parse import urlsplit
 
 import dns.exception
 import dns.resolver
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
 from pymongo.errors import ConfigurationError, ConnectionFailure, OperationFailure
 from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import account, admin, ai, auth, broadcast, campaigns, creator_api, rooms, content, creator, creator_courses, files, governance, guide, learn, payments, wallet, watch
+from .routers import account, admin, ai, audio, auth, broadcast, campaigns, creator_api, rooms, content, creator, creator_courses, editorial, files, governance, guide, learn, payments, stations, teams, wallet, watch
 from .admin_setup import bootstrap_admins
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
@@ -111,6 +111,8 @@ async def lifespan(app: FastAPI):
             except asyncio.TimeoutError:
                 pass
     tasks.append(asyncio.create_task(repair_loop()))
+    tasks.append(asyncio.create_task(stations.monitor_stations(stop)))
+    tasks.append(asyncio.create_task(editorial.publication_loop(stop)))
     if config.MEDIA_ENABLED:
         from .broadcast import media
         from .broadcast.relays import manager
@@ -139,8 +141,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LoNo API", version=VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
 api = APIRouter(prefix="/api")
-for r in (auth, account, admin, broadcast, rooms, guide, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn):
+for r in (auth, account, admin, audio, broadcast, rooms, guide, content, watch, creator, creator_courses, editorial, wallet, governance, ai, payments, files, learn, stations, teams):
     api.include_router(r.router)
+api.include_router(creator.review_router)
+api.include_router(editorial.moderation)
 
 
 @api.get("/")
@@ -150,6 +154,10 @@ async def root():
 
 @api.get("/health")
 async def health():
+    try:
+        await asyncio.wait_for(client.admin.command("ping"), timeout=4)
+    except (ConnectionFailure, ConfigurationError, OperationFailure, TimeoutError):
+        raise HTTPException(503, "Database unavailable") from None
     return {"status": "healthy", "time": now_iso()}
 
 

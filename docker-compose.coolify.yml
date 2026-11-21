@@ -1,0 +1,88 @@
+# Coolify controls HTTPS and the reverse proxy. Map only the web service to a domain.
+services:
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    expose:
+      - '80'
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://lono:${SERVICE_PASSWORD_MONGO}@mongo:27017/lono?authSource=admin
+      DB_NAME: lono
+      JWT_SECRET: ${SERVICE_PASSWORD_JWT}
+      SECRET_ENC_KEY: ${SERVICE_PASSWORD_ENCRYPTION}
+      MEDIA_INTERNAL_SECRET: ${SERVICE_PASSWORD_MEDIA}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-msf@ciu.edu.lr}
+      ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN}
+      SUPPORT_EMAIL: lono@ciu.edu.lr
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://lono.ciu.edu.lr}
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:-https://lono.ciu.edu.lr}
+      SEED_DEMO_DATA: 'false'
+      PILOT_MODE: 'true'
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      S3_BUCKET: ${S3_BUCKET:-lono-media}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      LOCAL_STORAGE_DIR: /app/data/uploads
+      RECORDINGS_DIR: /app/data/recordings
+      MAX_UPLOAD_MB: '4096'
+      MEDIA_ENABLED: ${MEDIA_ENABLED:-false}
+      MEDIA_ABR_ENABLED: ${MEDIA_ABR_ENABLED:-true}
+      MEDIA_API_URL: http://media:9997
+      MEDIA_HLS_URL: http://media:8888
+      MEDIA_WEBRTC_URL: http://media:8889
+      MEDIA_RTMP_INTERNAL: rtmp://media:1935
+      MEDIA_RTSP_INTERNAL: rtsp://media:8554
+      INGEST_RTMP_URL: ${INGEST_RTMP_URL:-rtmp://live.lono.ciu.edu.lr:1935/live}
+      INGEST_RTMPS_URL: ${INGEST_RTMPS_URL:-}
+      INGEST_SRT_URL: ${INGEST_SRT_URL:-srt://live.lono.ciu.edu.lr:8890}
+    volumes:
+      - lono-data:/app/data
+    depends_on:
+      - mongo
+      - media
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 60s
+
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: lono
+      MONGO_INITDB_ROOT_PASSWORD: ${SERVICE_PASSWORD_MONGO}
+    volumes:
+      - mongo-data:/data/db
+
+  media:
+    build: ./media
+    restart: unless-stopped
+    environment:
+      MTX_AUTHHTTPADDRESS: http://backend:8001/api/broadcast/mtx/auth
+      MTX_APIADDRESS: ':9997'
+      MTX_HLSADDRESS: ':8888'
+      MTX_RTSPADDRESS: ':8554'
+      MTX_WEBRTCADDITIONALHOSTS: ${LIVE_HOST:-live.lono.ciu.edu.lr}
+      MTX_WEBRTCLOCALUDPADDRESS: ':18189'
+      MTX_WEBRTCLOCALTCPADDRESS: ':18189'
+    ports:
+      - '18189:18189/udp'
+      - '18189:18189/tcp'
+
+volumes:
+  lono-data:
+  mongo-data:

@@ -26,7 +26,7 @@ function ChannelCard({ item, list, fav }) {
           </span>
         </div>
         <div className="absolute bottom-3 left-3 right-3">
-          <div className="font-display font-medium truncate">{item.title}</div>
+          <div className="font-display font-medium truncate">{item.station_name || item.title}</div>
           <div className="text-xs text-gray-300 truncate">{item.now ? `${item.now.title} · until ${time(item.now.end)}` : item.category}</div>
         </div>
       </Link>
@@ -62,6 +62,7 @@ export default function Live() {
     <div data-testid="live-page" className="max-w-[1600px] mx-auto px-4 md:px-8 pt-8 pb-24">
       <h1 className="font-display text-4xl md:text-5xl font-semibold tracking-tighter">Live</h1>
       <p className="mt-3 text-gray-400 max-w-2xl">Live TV, radio and 24/7 streams from creators and stations across the LoNo network.</p>
+      <Link to="/stations" className="mt-4 inline-flex gap-2 items-center rounded-full bg-white/10 border border-white/15 px-5 py-2.5 text-sm hover:bg-white/20"><Radio className="w-4 h-4" /> Permanent stations & programme guide</Link>
 
       <div role="tablist" aria-label="Live sections" className="mt-8 flex gap-2 overflow-x-auto">
         {TABS.map(([k, label, Icon]) => (

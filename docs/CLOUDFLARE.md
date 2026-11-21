@@ -59,6 +59,8 @@ In **github.com/manevia/LoNo → Settings → Secrets and variables → Actions 
 
 Optional: `ANTHROPIC_API_KEY` (AI assistant), `GOOGLE_CLIENT_ID` (Google sign-in).
 
+For paid subscriptions, set both `STRIPE_API_KEY` and `STRIPE_WEBHOOK_SECRET` as GitHub Actions secrets and register the Stripe webhook at `https://lono.ciu.edu.lr/api/payments/webhook`. Checkout remains unavailable until both settings are present.
+
 You don't create LoNo's internal secrets (sign-in signing and key encryption). The first deployment generates them in Cloudflare, and later deployments leave them unchanged.
 
 ## 4. Deploy

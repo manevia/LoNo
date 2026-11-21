@@ -3,12 +3,58 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from typing import Literal
 
 from ..db import db
 from ..security import get_user, get_user_optional
+from .audio import CARD as AUDIO_CARD, AVAILABLE as AUDIO_AVAILABLE
 
 router = APIRouter(tags=["content"])
 P = {"_id": 0, "subtitles_vtt": 0, "transcript": 0}
+EPISODE_CARD={"_id":0,"id":1,"title":1,"category":1,"thumbnail_url":1,"description":1,"duration_sec":1,"kind":1,"series":1}
+
+
+@router.get("/series")
+async def series_catalogue(offset:int=0):
+    # Legacy standalone series remain visible; structured episodes collapse into one card per channel-owned series.
+    rows=await db.content.aggregate([
+        {"$match":{"kind":"series"}},
+        {"$sort":{"series.season":1,"series.episode":1,"id":1}},
+        {"$group":{"_id":{"$ifNull":["$series.key","$id"]},"first":{"$first":"$$ROOT"},"episodes":{"$sum":1},"seasons":{"$addToSet":"$series.season"},"updated":{"$max":"$created_at"}}},
+        {"$sort":{"updated":-1,"_id":1}},{"$skip":max(0,offset)},{"$limit":101},
+        {"$project":{"_id":0,"key":"$_id","id":"$first.id","title":{"$ifNull":["$first.series.series_title","$first.title"]},"category":"$first.category","thumbnail_url":"$first.thumbnail_url","kind":"$first.kind","series":"$first.series","episodes":1,"seasons":1}}
+    ]).to_list(101)
+    return {"items":rows[:100],"has_more":len(rows)>100}
+
+
+@router.get("/series/{key}")
+async def series_episodes(key:str,season:int|None=None,offset:int=0):
+    q={"kind":"series","series.key":key,"gated":{"$ne":True}}
+    seasons=sorted(await db.content.distinct("series.season",q))
+    if not seasons:raise HTTPException(404,"Series not found")
+    season=season if season is not None else seasons[0]
+    rows=await db.content.find({**q,"series.season":season},EPISODE_CARD).sort([("series.episode",1),("id",1)]).skip(max(0,offset)).limit(101).to_list(101)
+    return {"seasons":seasons,"season":season,"items":rows[:100],"has_more":len(rows)>100}
+
+
+@router.get("/films")
+async def films(format:Literal["all","feature","documentary","short_film"]="all", genre:str="", collection:str="", sort:Literal["newest","popular","rating"]="newest", offset:int=0):
+    q={"kind":"movie"}
+    if format=="feature":q["$or"]=[{"film.format":"feature"},{"film.format":{"$exists":False}}]
+    elif format!="all":q["film.format"]=format
+    if genre:q["$and"]=[{"$or":[{"film.genres":genre},{"category":genre}]}]
+    if collection:q["film.collection"]=collection
+    field={"newest":"created_at","popular":"views","rating":"rating"}[sort]
+    rows=await db.content.find(q,P).sort([(field,-1),("id",1)]).skip(max(0,offset)).limit(100).to_list(100)
+    for row in rows:
+        if row.get("gated"):
+            row.pop("stream_url",None)
+            row.pop("media_prefix",None)
+    # Facets derive solely from published movie rows, including legacy movies.
+    sample=await db.content.find({"kind":"movie"},{"_id":0,"category":1,"film":1}).limit(1000).to_list(1000)
+    genres=sorted({g for c in sample for g in ((c.get("film") or {}).get("genres") or [c.get("category")]) if g})
+    collections=sorted({(c.get("film") or {}).get("collection") for c in sample if (c.get("film") or {}).get("collection")})
+    return {"items":rows,"genres":genres,"collections":collections,"has_more":len(rows)==100}
 
 
 @router.get("/content")
@@ -69,8 +115,16 @@ async def get_content(content_id: str, user=Depends(get_user_optional)):
         c.pop("stream_url", None); c.pop("media_prefix", None)
         offer = await db.campaigns.find_one({"replay_content_id": content_id, "status": {"$in": ["open", "paused", "closed"]}}, {"id": 1})
         c["offer_id"] = (offer or {}).get("id")
+    if c.get("series") and c["series"].get("key") and not c.get("gated"):
+        s=c["series"];q={"kind":"series","series.key":s["key"],"gated":{"$ne":True}}
+        c["next_episode"]=await db.content.find_one({**q,"$or":[{"series.season":{"$gt":s["season"]}},{"series.season":s["season"],"series.episode":{"$gt":s["episode"]}}]},EPISODE_CARD,sort=[("series.season",1),("series.episode",1)])
+        c["previous_episode"]=await db.content.find_one({**q,"$or":[{"series.season":{"$lt":s["season"]}},{"series.season":s["season"],"series.episode":{"$lt":s["episode"]}}]},EPISODE_CARD,sort=[("series.season",-1),("series.episode",-1)])
+    if c.get("kind") in ("music","podcast") and (c.get("audio") or {}).get("collection_key") and not c.get("gated"):
+        a=c["audio"];q={**AUDIO_AVAILABLE,"audio.collection_key":a["collection_key"]}
+        c["next_audio"]=await db.content.find_one({**q,"$or":[{"audio.season":{"$gt":a["season"]}},{"audio.season":a["season"],"audio.track":{"$gt":a["track"]}}]},AUDIO_CARD,sort=[("audio.season",1),("audio.track",1)])
+        c["previous_audio"]=await db.content.find_one({**q,"$or":[{"audio.season":{"$lt":a["season"]}},{"audio.season":a["season"],"audio.track":{"$lt":a["track"]}}]},AUDIO_CARD,sort=[("audio.season",-1),("audio.track",-1)])
     c["has_subtitles"] = bool(await db.content.count_documents({"id": content_id, "subtitles_vtt": {"$exists": True}}))
-    c["channel"] = await db.channels.find_one({"id": c.get("channel_id")}, {"_id": 0}) if c.get("channel_id") else None
+    c["channel"] = await db.channels.find_one({"id": c.get("channel_id")}, {"_id": 0, "creator_profile":0,"verification_reason":0,"creator_revision":0,"verification_submitted_at":0,"verification_reviewed_at":0}) if c.get("channel_id") else None
     c["similar"] = await db.content.find(
         {"category": c["category"], "id": {"$ne": content_id}}, P).limit(8).to_list(8)
     if len(c["similar"]) < 4:
@@ -176,12 +230,12 @@ async def clear_history(user=Depends(get_user)):
 
 @router.get("/channels")
 async def list_channels():
-    return await db.channels.find({}, {"_id": 0}).to_list(200)
+    return await db.channels.find({}, {"_id": 0, "creator_profile":0,"verification_reason":0,"creator_revision":0,"verification_submitted_at":0,"verification_reviewed_at":0}).to_list(200)
 
 
 @router.get("/channels/{channel_id}")
 async def get_channel(channel_id: str, user=Depends(get_user_optional)):
-    ch = await db.channels.find_one({"id": channel_id}, {"_id": 0})
+    ch = await db.channels.find_one({"id": channel_id}, {"_id": 0, "creator_profile":0,"verification_reason":0,"creator_revision":0,"verification_submitted_at":0,"verification_reviewed_at":0})
     if not ch:
         raise HTTPException(404, "Channel not found")
     ch["content"] = await db.content.find({"channel_id": channel_id}, P).to_list(200)

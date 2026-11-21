@@ -7,6 +7,7 @@ import { useConfig } from "@/lib/config";
 import { publishWhip } from "@/lib/whip";
 import MediaPlayer from "@/components/MediaPlayer";
 import DevicesPanel from "@/components/studio/DevicesPanel";
+import ProductionPanel from "@/components/studio/ProductionPanel";
 import EncoderPanel from "@/components/studio/EncoderPanel";
 import DestinationsPanel from "@/components/studio/DestinationsPanel";
 import RecordingsPanel from "@/components/studio/RecordingsPanel";
@@ -32,12 +33,15 @@ export default function LiveStudio() {
   const cfg = useConfig();
   const [mode, setMode] = useState(() => localStorage.getItem("lono_studio_mode") || "device");
   const [tracks, setTracks] = useState({ video: null, audio: null });
+  const [rawTracks, setRawTracks] = useState({video:null,audio:null});
+  const [production, setProduction] = useState(false);
   const [session, setSession] = useState(undefined);
   const [events, setEvents] = useState([]);
   const [selected, setSelected] = useState(() => { try { return JSON.parse(localStorage.getItem("lono_studio_dests") || "[]"); } catch { return []; } });
   const [form, setForm] = useState({ title: "", description: "", kind: "live_tv", record: true });
   const [busy, setBusy] = useState("");
   const [stats, setStats] = useState(null);
+  const [playback, setPlayback] = useState(null);
   const [recKey, setRecKey] = useState(0);
   const pub = useRef(null);
   const tracksRef = useRef(tracks);
@@ -63,8 +67,10 @@ export default function LiveStudio() {
   // Switching camera or mic while sending replaces the track without reconnecting.
   const onTracks = useCallback((t) => {
     setTracks(t);
-    if (pub.current) { pub.current.replace("video", t.video); pub.current.replace("audio", t.audio); }
+    if (pub.current) { pub.current.replace("video", t.video).catch(()=>toast.error("Video source could not switch")); pub.current.replace("audio", t.audio).catch(()=>toast.error("Audio source could not switch")); }
   }, []);
+  const onDeviceTracks = useCallback(t=>{setRawTracks(t);if(!production)onTracks(t);},[production,onTracks]);
+  const toggleProduction = () => {if(session||busy)return;const enabled=!production;setProduction(enabled);onTracks(enabled?{video:null,audio:null}:rawTracks);};
 
   const startPublishing = async () => {
     if (mode !== "device") return;
@@ -77,14 +83,21 @@ export default function LiveStudio() {
   const run = async (key, fn) => { setBusy(key); try { await fn(); } catch (e) { toast.error(e?.response ? errorText(e) : e.message); } finally { setBusy(""); refresh(); } };
 
   const startTest = () => run("test", async () => {
+    if (mode === "device" && !tracksRef.current.audio && !tracksRef.current.video) throw new Error("Enable your device or start the production mixer first.");
     await api.post("/broadcast/sessions", { title: form.title || "Private test", kind: form.kind, test: true });
     await startPublishing();
     toast.success("Private test started. Only you can see the preview.");
   });
   const stopTest = () => run("stoptest", async () => { await stopPublishing(); if (session) await api.post(`/broadcast/sessions/${session.id}/stop`); });
+  const reconnectDevice = () => run("reconnect", async () => {
+    await stopPublishing();
+    await startPublishing();
+    toast.success("Reconnecting your camera to the existing broadcast.");
+  });
 
   const goLive = () => run("live", async () => {
     if (!form.title.trim()) throw new Error("Give your broadcast a title.");
+    if (mode === "device" && !tracksRef.current.audio && !tracksRef.current.video) throw new Error("Enable your device or start the production mixer first.");
     if (session?.visibility === "test") { await stopPublishing(); await api.post(`/broadcast/sessions/${session.id}/stop`); }
     const { data: s } = await api.post("/broadcast/sessions", { ...form, test: false, destination_ids: selected }, { headers: { "Idempotency-Key": `studio-${Date.now()}` } });
     await startPublishing();
@@ -115,10 +128,12 @@ export default function LiveStudio() {
   const live = session?.status === "live";
   const testing = session?.visibility === "test";
   const feed = session?.feed || {};
+  const adaptive = session?.adaptive || {};
 
   return (
     <div data-testid="live-studio" className="max-w-[1500px] mx-auto px-4 md:px-8 pt-8 pb-32">
       <Link to="/studio" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white"><ArrowLeft className="w-4 h-4" /> Studio</Link>
+      <Link to="/studio/control" className="ml-4 text-sm text-[#FF8A82]">Remote guest & multi-presenter studio</Link>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight mr-auto">Live Studio</h1>
         <span data-testid="studio-status" className={`text-sm px-3 py-1 rounded-full border ${live ? "text-white bg-[#FF3B30] border-[#FF3B30]" : testing ? "text-[#FFB000] border-[#FFB000]/40" : "text-gray-400 border-white/15"}`}>
@@ -133,14 +148,14 @@ export default function LiveStudio() {
             <h2 id="src-h" className="font-display text-xl mb-4">Devices & Sources</h2>
             <div role="tablist" className="mb-5 grid grid-cols-2 gap-2">
               {[["device", "This device", Laptop, "Camera and microphone in this browser"], ["encoder", "External encoder", MonitorUp, "OBS, vMix, Streamlabs, Wirecast, hardware"]].map(([k, l, I, d]) => (
-                <button key={k} role="tab" aria-selected={mode === k} onClick={() => setMode(k)} disabled={!!session} data-testid={`mode-${k}`}
+                <button key={k} role="tab" aria-selected={mode === k} onClick={() => {if(k!==mode){setProduction(false);setRawTracks({video:null,audio:null});onTracks({video:null,audio:null});setMode(k);}}} disabled={!!session||!!busy} data-testid={`mode-${k}`}
                   className={`text-left rounded-xl p-3 border transition disabled:opacity-60 ${mode === k ? "border-[#FFB000]/60 bg-[#FFB000]/10" : "border-white/10 hover:border-white/25"}`}>
                   <div className="flex items-center gap-2 text-sm font-medium"><I className="w-4 h-4" /> {l}</div>
                   <div className="text-xs text-gray-400 mt-1">{d}</div>
                 </button>
               ))}
             </div>
-            {mode === "device" ? <DevicesPanel onTracks={onTracks} live={live} /> : <EncoderPanel live={live} />}
+            {mode === "device" ? <><DevicesPanel onTracks={onDeviceTracks} live={live} /><div className="mt-4"><button type="button" className="rounded-full border border-white/15 px-4 py-2 text-sm disabled:opacity-40" disabled={!!session||!!busy} onClick={toggleProduction}>{production?"Return to direct device mode":"Enable professional production mode"}</button>{production&&<ProductionPanel raw={rawTracks} onTracks={onTracks}/>}</div></> : <EncoderPanel live={live} />}
           </div>
           <TestSetup mode={mode} videoTrack={tracks.video} audioTrack={tracks.audio} testing={!!session}
             stats={mode === "device" ? stats : feed.ready ? { kbps: feed.bitrate_kbps, lossPct: 0 } : null} />
@@ -152,8 +167,8 @@ export default function LiveStudio() {
             <h2 id="bc-h" className="font-display text-xl">What LoNo receives</h2>
             <div className="mt-3 aspect-video rounded-xl overflow-hidden bg-black ring-1 ring-white/10 grid place-items-center" data-testid="feed-preview">
               {session && feed.ready
-                ? <MediaPlayer key={`${session.id}-${feed.since}`} src={session.preview_url} live autoPlay nativeControls showOptions={false} testId="studio-preview"
-                    audio={form.kind === "live_radio"} className="w-full h-full object-contain" mediaProps={{ muted: true }} />
+                ? <MediaPlayer key={`${session.id}-${feed.since}-${!!adaptive.ready}`} src={session.preview_url} live autoPlay nativeControls showOptions={false} testId="studio-preview"
+                    audio={form.kind === "live_radio"} className="w-full h-full object-contain" mediaProps={{ muted: true }} onPlaybackHealth={setPlayback} />
                 : <span className="text-sm text-gray-500 px-6 text-center">{session ? (mode === "encoder" ? "Waiting for your encoder… Start streaming to the server and key on the left." : "Connecting your camera…") : "Start a private test to see what viewers will see."}</span>}
             </div>
             {session && (
@@ -164,6 +179,13 @@ export default function LiveStudio() {
                 {feed.has_audio === false && feed.ready && <span className="text-[#FFB000]">No audio track</span>}
               </div>
             )}
+            {session && adaptive.state && <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-gray-300" data-testid="adaptive-health" aria-live="polite">
+              <div className="flex flex-wrap justify-between gap-2"><span className="font-medium text-white">Adaptive streaming</span><span>{adaptive.state === "ready" ? "Ready" : adaptive.state === "starting" || adaptive.state === "pending" ? "Preparing renditions" : adaptive.state === "disabled" ? "Single stream" : "Original stream fallback"}</span></div>
+              {adaptive.reason && <p className="mt-2 text-gray-400">{adaptive.reason}. Your original stream remains available.</p>}
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1"><span>Encoder slots: {adaptive.active_encoders}/{adaptive.encoder_limit}</span>{adaptive.ready && <span>Target profiles: {adaptive.renditions?.join("p / ")}p</span>}{adaptive.attempts > 1 && <span>Encoding attempts: {adaptive.attempts}</span>}</div>
+              {feed.ready && playback && <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-gray-400"><span>Preview: {playback.quality ? `${playback.quality}p` : "audio / initializing"}</span><span>Buffer: {playback.buffer}s</span>{playback.liveDelay != null && <span>Live-edge delay: {playback.liveDelay}s</span>}{playback.bandwidth != null && <span>Estimated bandwidth: {playback.bandwidth} kbps</span>}<span>Buffering events: {playback.stalls}</span>{playback.buffering && <span className="text-[#FFB000]">Buffering…</span>}</div>}
+            </div>}
+            {session && mode === "device" && !feed.ready && <button type="button" onClick={reconnectDevice} disabled={!!busy} className="mt-3 rounded-full border border-white/15 px-4 py-2 text-sm disabled:opacity-50" data-testid="reconnect-source">Reconnect camera / microphone</button>}
           </div>
 
           <div className={card}>
@@ -185,6 +207,7 @@ export default function LiveStudio() {
             <div className="mt-6 flex flex-wrap gap-3">
               {!session && <button onClick={startTest} disabled={!!busy} data-testid="start-test" className="rounded-full px-5 py-2.5 text-sm font-medium bg-white/10 border border-white/15 disabled:opacity-50">{busy === "test" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Start private test"}</button>}
               {testing && <button onClick={stopTest} disabled={!!busy} data-testid="stop-test" className="rounded-full px-5 py-2.5 text-sm bg-white/10 border border-white/15">Stop test</button>}
+              {session && !testing && !live && <button onClick={stopTest} disabled={!!busy} data-testid="cancel-pending" className="rounded-full px-5 py-2.5 text-sm bg-white/10 border border-white/15">Cancel pending broadcast</button>}
               {!live && <button onClick={goLive} disabled={!!busy} data-testid="go-live" className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium bg-[#FF3B30] hover:bg-[#FF5C53] disabled:opacity-50">{busy === "live" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />} Go live</button>}
               {live && <button onClick={end} disabled={!!busy} data-testid="end-broadcast" className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium bg-white text-black"><Square className="w-4 h-4" /> End broadcast</button>}
             </div>

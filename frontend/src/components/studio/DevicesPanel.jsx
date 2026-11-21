@@ -168,7 +168,7 @@ export default function DevicesPanel({ onTracks, live }) {
             {DeviceSelect({ kind: "camera", list: devices.video, value: cameraId, onChange: switchCamera, testId: "select-camera" })}</label>
           <label className="block"><span className="text-sm text-gray-400 mb-1.5 block">Quality</span>
             <select value={quality} onChange={async (e) => { setQuality(e.target.value); saveDevicePrefs({ quality: e.target.value }); const c = await startCamera(cameraId, e.target.value); report(c, micRef.current); }} className={sel}>
-              {["480p", "720p", "1080p"].map((q) => <option key={q} className="bg-[#121212]">{q}</option>)}
+              {["360p", "480p", "720p", "1080p"].map((q) => <option key={q} value={q} className="bg-[#121212]">{q}{q === "360p" ? " · low bandwidth" : q === "480p" ? " · balanced" : ""}</option>)}
             </select></label>
           <label className="block"><span className="text-sm text-gray-400 flex items-center gap-1.5 mb-1.5"><Mic className="w-4 h-4" /> Microphone or audio interface</span>
             {DeviceSelect({ kind: "microphone", list: devices.audio, value: micId, onChange: switchMic, testId: "select-mic" })}</label>

@@ -3,11 +3,15 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Download, Loader2, ShieldCheck } from "lucide-react";
 import Campaigns from "@/components/admin/Campaigns";
+import Broadcasts from "@/components/admin/Broadcasts";
+import CreatorReviews from "@/components/admin/CreatorReviews";
+import EditorialModeration from "@/components/admin/EditorialModeration";
+import { AdminStations } from "@/pages/Stations";
 import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Stars } from "@/components/Stars";
 
-const TABS = [["overview", "Overview"], ["campaigns", "Campaigns"], ["reports", "Reports"], ["users", "Users"], ["courses", "Courses"], ["audit", "Audit log"]];
+const TABS = [["overview", "Overview"], ["broadcasts", "Live broadcasts"], ["stations", "TV & Radio stations"], ["creators","Creators"], ["editorial","Editorial"], ["campaigns", "Campaigns"], ["reports", "Reports"], ["users", "Users"], ["courses", "Courses"], ["audit", "Audit log"]];
 const card = "rounded-2xl bg-[#121212] border border-white/10";
 const btn = "text-xs rounded-full px-3 py-1.5 border transition disabled:opacity-40";
 const ACTION_LABELS = {
@@ -101,6 +105,13 @@ function Users() {
   const [items, setItems] = useState(null);
   const load = useCallback((term) => api.get("/admin/users", { params: { q: term } }).then(({ data }) => setItems(data)), []);
   useEffect(() => { load(""); }, [load]);
+  const toggleBroadcast = async (u) => {
+    const blocked = !u.broadcast_blocked;
+    const reason = ask(`${blocked ? "Restrict" : "Restore"} broadcasting for ${u.name}? Enter a reason (audited).`);
+    if (!reason) return;
+    try { await api.post(`/admin/users/${u.id}/broadcast-permission`, { blocked, reason }); toast.success("Broadcast permission updated"); load(q); }
+    catch (e) { toast.error(errorText(e)); }
+  };
   const toggle = async (u) => {
     try {
       if (u.suspended) await api.post(`/admin/users/${u.id}/reinstate`);
@@ -129,11 +140,11 @@ function Users() {
             {items.map((u) => (
               <tr key={u.id}>
                 <td className="py-2.5 pr-4 whitespace-nowrap">{u.name}{u.is_admin && <span className="ml-2 text-[10px] text-[#FFB000]">ADMIN</span>}
-                  {u.suspended && <span className="ml-2 text-[10px] text-[#FF8A82]">SUSPENDED</span>}</td>
+                  {u.suspended && <span className="ml-2 text-[10px] text-[#FF8A82]">SUSPENDED</span>}{u.broadcast_blocked && <span className="ml-2 text-[10px] text-[#FF8A82]">BROADCAST RESTRICTED</span>}</td>
                 <td className="py-2.5 pr-4 text-gray-400">{u.email}</td>
                 <td className="py-2.5 pr-4 text-gray-400 whitespace-nowrap">{new Date(u.created_at).toLocaleDateString()}</td>
                 <td className="py-2.5 pr-4 text-right tabular-nums">{u.wallet?.lono_balance?.toFixed(0)}</td>
-                <td className="py-2.5 text-right">{!u.is_admin && (
+                <td className="py-2.5 text-right">{!u.is_admin && <button onClick={() => toggleBroadcast(u)} className={`${btn} border-white/15 text-gray-300 mr-2`}>{u.broadcast_blocked ? "Restore broadcasting" : "Restrict broadcasting"}</button>}{!u.is_admin && (
                   <button onClick={() => toggle(u)} className={`${btn} ${u.suspended ? "border-white/15 text-gray-300" : "border-[#FF3B30]/40 text-[#FF8A82]"}`}>
                     {u.suspended ? "Reinstate" : "Suspend"}
                   </button>)}</td>
@@ -238,7 +249,7 @@ export default function Admin() {
         <Link to="/" className="mt-3 inline-block text-[#FF3B30]">Back to Home</Link></div>
     </div>
   );
-  const Panel = { overview: Overview, campaigns: Campaigns, reports: Reports, users: Users, courses: Courses, audit: Audit }[tab] || Overview;
+  const Panel = { overview: Overview, broadcasts: Broadcasts, stations: AdminStations, creators:CreatorReviews, editorial:EditorialModeration, campaigns: Campaigns, reports: Reports, users: Users, courses: Courses, audit: Audit }[tab] || Overview;
 
   return (
     <div data-testid="admin-page" className="max-w-6xl mx-auto px-4 md:px-8 pt-10 pb-32">

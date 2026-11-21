@@ -7,6 +7,7 @@ import { useConfig } from "@/lib/config";
 import { Compositor } from "@/lib/compositor";
 import { publishWhip, playWhep } from "@/lib/whip";
 import DestinationsPanel from "@/components/studio/DestinationsPanel";
+import ProductionRundown from "@/components/studio/ProductionRundown";
 
 const card = "rounded-2xl bg-[#121212] border border-white/10";
 const chip = "inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-40";
@@ -51,13 +52,14 @@ function Meter({ comp, id }) {
   return <div className="h-1.5 rounded-full bg-white/10 overflow-hidden" data-testid={`meter-${id}`} data-db={Math.round(db)}><div className="h-full bg-[#34C759]" style={{ width: `${Math.max(0, Math.min(100, ((db + 60) / 60) * 100))}%` }} /></div>;
 }
 
-function Tile({ c, comp, room, onPreview, onAction, onTalk, talking, splitSel, toggleSplit }) {
+function Tile({ c, comp, room, onPreview, onAction, onTalk, talking, splitSel, toggleSplit, onGain }) {
   const ref = useRef(null);
   useEffect(() => {
     const s = comp.current?.sources.get(c.id);
     if (ref.current && s?.stream && ref.current.srcObject !== s.stream) { ref.current.srcObject = s.stream; ref.current.play().catch(() => {}); }
   });
   const onAir = room.program.sources.includes(c.id), inPreview = room.preview.sources.includes(c.id);
+  const admitted = c.admitted !== false;
   return (
     <div className={`${card} overflow-hidden ${onAir ? "ring-2 ring-[#FF3B30]" : inPreview ? "ring-2 ring-[#34C759]" : ""}`} data-testid={`tile-${c.id}`} data-state={c.state} data-connected={c.connected ? "1" : "0"}>
       <div className="relative aspect-video bg-black">
@@ -68,13 +70,16 @@ function Tile({ c, comp, room, onPreview, onAction, onTalk, talking, splitSel, t
       </div>
       <div className="p-3 space-y-2">
         <div className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={splitSel.includes(c.id)} onChange={() => toggleSplit(c.id)} aria-label={`Select ${c.name} for split screen`} className="accent-[#FFB000]" data-testid={`split-${c.id}`} />
+          <input type="checkbox" disabled={!admitted||!c.connected} checked={splitSel.includes(c.id)} onChange={() => toggleSplit(c.id)} aria-label={`Select ${c.name} for split screen`} className="accent-[#FFB000]" data-testid={`split-${c.id}`} />
           <span className="font-medium truncate">{c.name}</span><span className="text-xs text-gray-500 capitalize">{c.role}</span>
         </div>
         {c.location && <div className="text-xs text-gray-400 flex items-center gap-1"><MapPin className="w-3 h-3" /> {c.location} {c.show_location ? "(shown on air)" : "(private)"}</div>}
         <Meter comp={comp} id={c.id} />
+        {!admitted&&<p className="text-amber-300 text-xs">Waiting for host admission</p>}
+        <label className="block text-xs text-gray-400">Audio gain (0–200%)<input type="number" min="0" max="200" step="5" key={c.gain??1} defaultValue={Math.round((c.gain??1)*100)} onBlur={e=>{const value=Number(e.target.value);if(Number.isFinite(value)&&value>=0&&value<=200&&value!==Math.round((c.gain??1)*100))onGain(c.id,value/100);}} className={field}/></label>
         <div className="flex flex-wrap gap-1.5">
-          <button className={chip} onClick={() => onPreview(c.id)} disabled={!c.connected} data-testid={`preview-${c.id}`}><Monitor className="w-3.5 h-3.5" /> Preview</button>
+          {!admitted&&<button className={chip} disabled={!c.connected} onClick={()=>onAction(c.id,"admit")}>Admit guest</button>}
+          <button className={chip} onClick={() => onPreview(c.id)} disabled={!c.connected||!admitted} data-testid={`preview-${c.id}`}><Monitor className="w-3.5 h-3.5" /> Preview</button>
           {c.state === "cued" ? <button className={chip} onClick={() => onAction(c.id, "uncue")}>Uncue</button>
             : <button className={chip} onClick={() => onAction(c.id, "cue", window.prompt("Cue message", "Stand by: you're next") || "Stand by")} disabled={c.state === "on_air" || !c.connected} data-testid={`cue-${c.id}`}>Cue</button>}
           <button className={`${chip} ${talking ? "!bg-[#FFB000] !text-black" : ""}`} onClick={() => onTalk(c.id)} disabled={!c.connected} data-testid={`talk-${c.id}`}><Mic className="w-3.5 h-3.5" /> {talking ? "Talking" : "Talk"}</button>
@@ -99,7 +104,7 @@ function Room({ roomId }) {
   const [events, setEvents] = useState([]);
   const [splitSel, setSplitSel] = useState([]);
   const [clips, setClips] = useState([]);
-  const [invite, setInvite] = useState({ name: "", role: "reporter", type: "browser", location: "", show_location: false, expires_in_minutes: 240 });
+  const [invite, setInvite] = useState({ name: "", role: "guest", type: "browser", location: "", show_location: false, expires_in_minutes: 240 });
   const [lastInvite, setLastInvite] = useState(null);
   const [selected, setSelected] = useState(() => { try { return JSON.parse(localStorage.getItem("lono_studio_dests") || "[]"); } catch { return []; } });
   const [session, setSession] = useState(null);
@@ -107,6 +112,13 @@ function Room({ roomId }) {
   const [autoFallback, setAutoFallback] = useState(true);
   const [talkTo, setTalkTo] = useState(null);
   const [title, setTitle] = useState("");
+  const [broadcastKind,setBroadcastKind]=useState("live_tv");
+  const [local,setLocal]=useState(null);
+  const [localMuted,setLocalMuted]=useState(false);
+  const [hostMonitor,setHostMonitor]=useState(false);
+  const [effectFile,setEffectFile]=useState(null),[effectVolume,setEffectVolume]=useState(0.7);
+  const hostAudio=useRef(null);
+  const localRef=useRef(null);
   const programRef = useRef(null), previewRef = useRef(null), comp = useRef(null);
   const feeds = useRef(new Map());     // cid -> {conn}
   const returns = useRef(new Map());   // cid -> publisher
@@ -142,6 +154,7 @@ function Room({ roomId }) {
       for (const f of feedMap.values()) f.conn?.stop();
       for (const p of returnMap.values()) p?.stop?.();
       programPub.current?.stop(); comp.current?.destroy(); comp.current = null;
+      talkStream.current?.getTracks().forEach(t=>t.stop());localRef.current?.getTracks().forEach(t=>t.stop());
     };
   }, [roomId, ready]);
   useEffect(() => { load(); const t = setInterval(load, 1000); return () => clearInterval(t); }, [load]);
@@ -169,7 +182,7 @@ function Room({ roomId }) {
     c.standbyText = room.standby_text;
     c.setScenes(room.program, room.preview);
     for (const ct of room.contributors) {
-      c.setSource(ct.id, { name: ct.name, location: ct.location, showLocation: ct.show_location, muted: ct.muted, audioOnly: ct.audio_only });
+      c.setSource(ct.id, { name: ct.name, location: ct.location, showLocation: ct.show_location, muted: ct.muted, audioOnly: ct.audio_only, gain: ct.gain??1 });
       let f = feeds.current.get(ct.id);
       // A feed whose own WebRTC connection died is replaced when the source is available again.
       if (f?.conn && ["failed", "closed"].includes(f.conn.pc.connectionState)) { f.conn.stop(); feeds.current.delete(ct.id); c.dropFeed(ct.id); f = null; }
@@ -177,7 +190,7 @@ function Room({ roomId }) {
         feeds.current.set(ct.id, { connecting: true });
         playWhep({ endpoint: `/rooms/${roomId}/sources/${ct.id}/whep`,
           onState: (s) => { if (s === "failed" || s === "closed") { feeds.current.delete(ct.id); c.dropFeed(ct.id); } } })
-          .then((conn) => { feeds.current.set(ct.id, { conn }); const done = () => c.setSource(ct.id, { stream: conn.stream, name: ct.name, location: ct.location, showLocation: ct.show_location, muted: ct.muted, audioOnly: ct.audio_only }); setTimeout(done, 300); })
+          .then((conn) => { if(comp.current!==c||!roomRef.current?.contributors.some(x=>x.id===ct.id)){conn.stop();return;}feeds.current.set(ct.id, { conn }); c.setSource(ct.id, { stream: conn.stream, name: ct.name, location: ct.location, showLocation: ct.show_location, muted: ct.muted, audioOnly: ct.audio_only, gain:ct.gain??1 }); })
           .catch(() => feeds.current.delete(ct.id));
       }
       // Note: ct.connected === false alone doesn't drop a working feed (the API's view can lag
@@ -186,10 +199,10 @@ function Room({ roomId }) {
         returns.current.set(ct.id, null);
         publishWhip({ endpoint: `/rooms/${roomId}/returns/${ct.id}/whip`, video: null, audio: c.returnStream(ct.id).getAudioTracks()[0],
           onState: (s) => { if (s === "failed") returns.current.delete(ct.id); } })
-          .then((p) => returns.current.set(ct.id, p)).catch(() => returns.current.delete(ct.id));
+          .then((p) => {if(comp.current!==c||!roomRef.current?.contributors.some(x=>x.id===ct.id)){p.stop();return;}returns.current.set(ct.id,p);}).catch(() => returns.current.delete(ct.id));
       }
     }
-    for (const id of [...c.sources.keys()]) if (!room.contributors.some((x) => x.id === id)) { feeds.current.get(id)?.conn?.stop(); feeds.current.delete(id); c.removeSource(id); }
+    for (const id of [...c.sources.keys()]) if (id!=="local"&&!room.contributors.some((x) => x.id === id)) { feeds.current.get(id)?.conn?.stop(); feeds.current.delete(id); returns.current.get(id)?.stop();returns.current.delete(id);c.removeSource(id); }
   }, [room, roomId]);
 
   const run = async (k, fn) => { setBusy(k); try { await fn(); } catch (e) { toast.error(e?.response ? errorText(e) : e.message); } finally { setBusy(""); load(); } };
@@ -198,7 +211,10 @@ function Room({ roomId }) {
   const action = (cid, act, message = "") => run("act", () => api.post(`/rooms/${roomId}/contributors/${cid}`, { action: act, message }));
   const anchor = room?.contributors.find((c) => c.role === "anchor" && c.connected);
   const cutToAnchor = () => anchor && run("cut", () => api.put(`/rooms/${roomId}/program`, { scene: "single", sources: [anchor.id] }));
-  const toggleSplit = (id) => setSplitSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id].slice(-2)));
+  const toggleSplit = (id) => setSplitSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id].slice(-4)));
+  const startLocal=async()=>{try{const stream=await navigator.mediaDevices.getUserMedia({video:broadcastKind!=="live_radio",audio:{echoCancellation:true}});if(!comp.current){stream.getTracks().forEach(t=>t.stop());return;}localRef.current=stream;setLocal(stream);setLocalMuted(false);comp.current.setSource("local",{stream,name:"Host",muted:false,audioOnly:!stream.getVideoTracks().length});await comp.current.resume();}catch(e){toast.error(e.message||"Unable to access host devices");}};
+  const stopLocal=()=>{localRef.current?.getTracks().forEach(t=>t.stop());localRef.current=null;setLocal(null);setHostMonitor(false);if(hostAudio.current)hostAudio.current.srcObject=null;setSplitSel(old=>old.filter(x=>x!=="local"));comp.current?.removeSource("local");};
+  const toggleHostMonitor=async()=>{const el=hostAudio.current;if(!el)return;if(hostMonitor){el.pause();el.srcObject=null;setHostMonitor(false);return;}try{await comp.current.resume();el.srcObject=comp.current.returnStream("local");await el.play();setHostMonitor(true);}catch(e){toast.error("Could not enable headphone monitoring");}};
 
   const talk = async (cid) => {
     await comp.current.resume();
@@ -218,8 +234,8 @@ function Room({ roomId }) {
   const startProgram = async (test) => {
     await comp.current.resume();
     if (session && session.status !== "ended") { await programPub.current?.stop(); programPub.current = null; await api.post(`/broadcast/sessions/${session.id}/stop`); }
-    const { data: s } = await api.post("/broadcast/sessions", test ? { title: `${title} (test)`, test: true } :
-      { title, description: `Live from the LoNo Control Room`, category: room.kind === "sports" ? "Sports" : room.kind === "news" ? "News" : "Live", test: false, destination_ids: selected, record: true },
+    const { data: s } = await api.post("/broadcast/sessions", test ? { title: `${title} (test)`, kind:broadcastKind, test: true } :
+      { title, kind:broadcastKind, description: `Live from the LoNo Control Room`, category: room.kind === "sports" ? "Sports" : room.kind === "news" ? "News" : "Live", test: false, destination_ids: selected, record: true },
       { headers: { "Idempotency-Key": `cr-${roomId}-${Date.now()}` } });
     await api.put(`/rooms/${roomId}/session`, { session_id: s.id });
     const ps = comp.current.programStream;
@@ -231,7 +247,7 @@ function Room({ roomId }) {
     }
   };
   const endProgram = () => run("end", async () => {
-    if (!window.confirm("End the broadcast on LoNo and all destinations?")) return;
+    if (session?.visibility!=="test"&&!window.confirm("End the broadcast on LoNo and all destinations?")) return;
     await api.post(`/broadcast/sessions/${session.id}/stop`); await programPub.current?.stop(); programPub.current = null;
     await api.put(`/rooms/${roomId}/session`, { session_id: null });
   });
@@ -265,7 +281,7 @@ function Room({ roomId }) {
         <button onClick={take} disabled={!!busy} data-testid="take" className="rounded-full px-6 py-2.5 font-display font-semibold bg-[#FF3B30] hover:bg-[#FF5C53]">TAKE</button>
         <button onClick={cutToAnchor} disabled={!anchor || !!busy} data-testid="cut-anchor" className={chip}>Cut to anchor</button>
         <span className="w-px h-6 bg-white/10 mx-1" />
-        <button onClick={() => setPreview({ scene: "split", sources: splitSel })} disabled={splitSel.length !== 2} data-testid="preview-split" className={chip}><Columns2 className="w-3.5 h-3.5" /> Preview split ({splitSel.length}/2)</button>
+        <button onClick={() => setPreview({ scene: "split", sources: splitSel })} disabled={splitSel.length < 2||splitSel.some(id=>id==="local"?!local:!room.contributors.some(c=>c.id===id&&c.connected&&c.admitted!==false))} data-testid="preview-split" className={chip}><Columns2 className="w-3.5 h-3.5" /> Preview panel ({splitSel.length}/4)</button>
         <select aria-label="Clip" onChange={(e) => e.target.value && setPreview({ scene: "clip", sources: [], clip_url: e.target.value })} className="text-xs bg-white/5 border border-white/10 rounded-full px-3 py-1.5" defaultValue="">
           <option value="" className="bg-[#121212]">Preview a clip…</option>
           {clips.map((v) => <option key={v.id} value={v.stream_url} className="bg-[#121212]">{v.title}</option>)}
@@ -274,14 +290,17 @@ function Room({ roomId }) {
         <label className="ml-auto flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={autoFallback} onChange={(e) => setAutoFallback(e.target.checked)} className="accent-[#FF3B30]" /> If an on-air feed drops, go to the anchor (or standby)</label>
       </div>
 
+      <div className="mt-4"><ProductionRundown key={room.id} room={room} refresh={load}/></div>
+      <section className={`${card} p-4 mt-4 space-y-3`}><h2 className="font-display text-lg">Sound effects & jingles</h2><p className="text-xs text-gray-400">Select an authorized local audio file. Play sends it immediately to the programme mix, including any active broadcast.</p><label className="block">Sound effect file<input type="file" accept="audio/*" className={field} onChange={e=>setEffectFile(e.target.files?.[0]||null)}/></label><label className="block">Effect volume · {Math.round(effectVolume*100)}%<input type="range" min={0} max={1} step={0.05} value={effectVolume} onChange={e=>setEffectVolume(Number(e.target.value))}/></label><div className="flex gap-2"><button className={chip} disabled={!effectFile} onClick={()=>comp.current?.playEffect(effectFile,effectVolume).catch(e=>toast.error(e.message||"Unable to play sound"))}>Play effect to programme</button><button className={chip} onClick={()=>comp.current?.stopEffect()}>Stop effect</button></div></section>
       <div className="mt-4 grid xl:grid-cols-[1fr_380px] gap-4">
         {/* Sources */}
         <div>
           <h2 className="font-display text-lg mb-2">Sources</h2>
+          <div className={`${card} p-3 mb-3 space-y-2`}><h3 className="font-semibold">Local host / presenter</h3><p className="text-xs text-gray-400">Enable your devices only when you want to appear in the production. Preview first; TAKE is the on-air switch. Use headphones to prevent echo.</p>{!local?<button className={chip} onClick={startLocal}>Enable host camera / microphone</button>:<div className="flex flex-wrap gap-2 items-center"><label className="text-xs"><input type="checkbox" checked={splitSel.includes("local")} onChange={()=>toggleSplit("local")}/> Select host for panel</label><button className={chip} onClick={()=>setPreview({scene:"single",sources:["local"]})}>Preview host</button><button className={chip} onClick={()=>{setLocalMuted(!localMuted);comp.current?.setSource("local",{name:"Host",muted:!localMuted,audioOnly:!local.getVideoTracks().length});}}>{localMuted?"Unmute host":"Mute host"}</button><button className={chip} onClick={toggleHostMonitor}>{hostMonitor?"Stop headphone monitor":"Hear guests in headphones"}</button><button className={chip} onClick={stopLocal}>Stop host devices</button><div className="w-full"><Meter comp={comp} id="local"/></div></div>}<audio ref={hostAudio}/></div>
           {room.contributors.length === 0 && <p className="text-sm text-gray-400">Invite an anchor and reporters, or add a venue encoder.</p>}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {room.contributors.map((c) => <Tile key={c.id} c={c} comp={comp} room={room} splitSel={splitSel} toggleSplit={toggleSplit}
-              onPreview={(id) => setPreview({ scene: "single", sources: [id] })} onAction={action} onTalk={talk} talking={talkTo === c.id} />)}
+              onPreview={(id) => setPreview({ scene: "single", sources: [id] })} onAction={action} onTalk={talk} talking={talkTo === c.id} onGain={(cid,gain)=>run("gain",()=>api.post(`/rooms/${roomId}/contributors/${cid}`,{action:"gain",gain}))} />)}
           </div>
         </div>
 
@@ -322,12 +341,13 @@ function Room({ roomId }) {
           <div className={`${card} p-4 space-y-3`} data-testid="program-output">
             <h2 className="font-display text-lg flex items-center gap-2"><Clapperboard className="w-4 h-4" /> Program output</h2>
             <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={live} className={field} aria-label="Broadcast title" />
-            <div className="text-xs text-gray-400">LoNo Live TV, plus:</div>
+            <label className="block text-xs text-gray-400">Broadcast format<select aria-label="Broadcast format" value={broadcastKind} disabled={!!session} onChange={e=>setBroadcastKind(e.target.value)} className={field}><option value="live_tv">LoNo Live TV</option><option value="live_radio">LoNo Radio</option></select></label>
+            <div className="text-xs text-gray-400">{broadcastKind==="live_radio"?"LoNo Radio":"LoNo Live TV"}, plus:</div>
             <DestinationsPanel selected={selected} onSelect={setSelected} locked={live} />
             <div className="flex flex-wrap gap-2 pt-1">
               {!live && <button onClick={() => run("test", () => startProgram(true))} disabled={!!busy} className={`${chip} !text-sm !px-4 !py-2`} data-testid="program-test">Private test</button>}
               {!live && <button onClick={() => run("live", () => startProgram(false))} disabled={!!busy} className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium bg-[#FF3B30]" data-testid="program-live">{busy === "live" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />} Go live</button>}
-              {live && <button onClick={endProgram} disabled={!!busy} className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium bg-white text-black" data-testid="program-end"><Square className="w-4 h-4" /> End broadcast</button>}
+              {session && <button onClick={endProgram} disabled={!!busy} className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium bg-white text-black" data-testid="program-end"><Square className="w-4 h-4" /> {live?"End broadcast":"Stop private test"}</button>}
             </div>
             {session && (
               <ul className="text-sm space-y-1" data-testid="program-destinations">

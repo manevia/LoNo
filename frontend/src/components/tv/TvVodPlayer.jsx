@@ -11,7 +11,7 @@ const HIDE_AFTER_MS = 5000;
  * Full screen hides the controls while playing; OK or any arrow reveals them,
  * and Back leaves full screen before leaving the page.
  */
-export default function TvVodPlayer({ item, audio, src, poster, subtitleUrl, artist, mediaProps, onLoadedMetadata, onPrev, onNext, prevLabel, nextLabel }) {
+export default function TvVodPlayer({ item, audio, src, poster, subtitleUrl, artist, mediaProps, onLoadedMetadata, onPrev, onNext, prevLabel, nextLabel, autoPlay=false }) {
   const media = useRef(null);
   const hls = useRef(null);
   const first = useRef(null);
@@ -63,7 +63,7 @@ export default function TvVodPlayer({ item, audio, src, poster, subtitleUrl, art
       <MediaPlayer
         key={item.id} ref={media} testId={audio ? "audio-player" : "video-player"} audio={audio} src={src} poster={poster}
         title={item.title} artist={artist} artwork={poster} subtitleUrl={subtitleUrl}
-        nativeControls={false} showOptions={false} mediaProps={mediaProps} onLoadedMetadata={onLoadedMetadata}
+        nativeControls={false} showOptions={false} mediaProps={mediaProps} onLoadedMetadata={onLoadedMetadata} autoPlay={autoPlay}
         onHls={(h) => { hls.current = h; }}
         className={audio ? "hidden" : full ? "w-full h-full object-contain bg-black" : "w-full aspect-video rounded-2xl bg-black ring-1 ring-white/10"}
       />

@@ -34,6 +34,8 @@ async def checkout(body: CheckoutIn, user=Depends(get_user)):
     if body.plan == "free":
         await db.users.update_one({"id": user["id"]}, {"$set": {"plan": "free"}})
         return {"url": None, "message": "You're on the Free plan"}
+    if not config.STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(503, "Payments are unavailable until webhook configuration is complete.")
     stripe = _stripe()
     try:
         s = stripe.checkout.Session.create(

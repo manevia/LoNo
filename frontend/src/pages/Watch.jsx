@@ -7,6 +7,9 @@ import useWatchSession from "@/lib/useWatchSession";
 import { Loader2, Share2, Plus, Check, ThumbsUp, Sparkles, Coins, Captions, GraduationCap, Star } from "lucide-react";
 import { toast } from "sonner";
 import ContentCard from "@/components/ContentCard";
+import FilmDetails from "@/components/FilmDetails";
+import SeriesEpisodes from "@/components/SeriesEpisodes";
+import AudioDetails from "@/components/AudioDetails";
 import MediaPlayer from "@/components/MediaPlayer";
 import TvVodPlayer from "@/components/tv/TvVodPlayer";
 import { usePrefs } from "@/lib/device";
@@ -21,6 +24,7 @@ export default function Watch() {
   const { tv } = usePrefs();
   const location = useLocation();
   const [item, setItem] = useState(null);
+  const [autoNext,setAutoNext]=useState(false);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState("");
   const [summarizing, setSummarizing] = useState(false);
@@ -34,6 +38,7 @@ export default function Watch() {
 
   useEffect(() => {
     let live = true;
+    setAutoNext(!!location.state?.autoNext);
     setItem(null); setError(null); setSummary(""); setSubtitleUrl(null);
     api.get(`/content/${id}`).then(({ data }) => {
       if (!live) return;
@@ -44,7 +49,7 @@ export default function Watch() {
       if (data.ai_summary) setSummary(data.ai_summary);
     }).catch((e) => live && setError(errorText(e, "This title couldn't be loaded.")));
     return () => { live = false; };
-  }, [id]);
+  }, [id,location.state?.autoNext]);
 
   const needUser = () => {
     if (user) return false;
@@ -122,10 +127,15 @@ export default function Watch() {
   );
   const isAudio = ["music", "podcast", "live_radio"].includes(item.kind);
   const isLive = item.kind.startsWith("live");
-  const nextItem = item.similar?.find((s) => !s.kind.startsWith("live"));
+  const audioOnDemand=["music","podcast"].includes(item.kind);
+  const queue=audioOnDemand&&Array.isArray(location.state?.audioQueue)?location.state.audioQueue:[];
+  const queueIndex=queue.findIndex(x=>x.id===item.id);
+  const nextItem = audioOnDemand?(queueIndex>=0?queue[queueIndex+1]:item.next_audio):item.series?.key ? item.next_episode : item.similar?.find((s) => !s.kind.startsWith("live"));
+  const previousItem=audioOnDemand?(queueIndex>=0?queue[queueIndex-1]:item.previous_audio):item.previous_episode;
   const prevId = location.state?.prevId;
-  const goNext = nextItem ? () => nav(`/watch/${nextItem.id}`, { state: { prevId: item.id } }) : undefined;
-  const goPrev = prevId ? () => nav(-1) : undefined;
+  const goNext = nextItem ? () => nav(`/watch/${nextItem.id}`, { state: { prevId: item.id, autoNext, audioQueue:queue, autoplay: audioOnDemand||!!item.series?.key } }) : undefined;
+  const goPrev = previousItem ? () => nav(`/watch/${previousItem.id}`,{state:{autoNext,audioQueue:queue,autoplay:audioOnDemand}}) : !audioOnDemand&&prevId ? () => nav(-1) : undefined;
+  const mediaProps={...watch.mediaProps,onEnded:e=>{watch.mediaProps.onEnded?.(e);if((audioOnDemand||item.series?.key)&&autoNext&&goNext)goNext();}};
   const resumeAt = viewer.position_sec || 0;
   const onLoadedMetadata = (e) => {
     const m = e.currentTarget;
@@ -142,23 +152,23 @@ export default function Watch() {
         <div className="lg:col-span-8">
           {tv && !isLive ? (
             <TvVodPlayer item={item} audio={isAudio} src={resolveMedia(item.stream_url)} poster={resolveMedia(item.thumbnail_url)}
-              artist={item.channel?.name} subtitleUrl={subtitleUrl} mediaProps={watch.mediaProps} onLoadedMetadata={onLoadedMetadata}
-              onNext={goNext} nextLabel={nextItem ? `Next: ${nextItem.title}` : undefined} onPrev={goPrev} />
+              artist={item.channel?.name} subtitleUrl={subtitleUrl} mediaProps={mediaProps} onLoadedMetadata={onLoadedMetadata}
+              onNext={goNext} nextLabel={nextItem ? `Next: ${nextItem.title}` : undefined} onPrev={goPrev} autoPlay={!!location.state?.autoplay} />
           ) : isAudio ? (
             <div className="relative rounded-2xl overflow-hidden bg-[#121212] ring-1 ring-white/10 aspect-video">
               <img loading="lazy" decoding="async" src={resolveMedia(item.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
               <div className="absolute inset-0 grid place-items-center p-6">
                 <div className="w-full max-w-lg">
-                  <MediaPlayer audio testId="audio-player" src={resolveMedia(item.stream_url)} live={isLive}
-                    title={item.title} artist={item.channel?.name} artwork={resolveMedia(item.thumbnail_url)}
-                    mediaProps={watch.mediaProps} onLoadedMetadata={onLoadedMetadata} />
+                  <MediaPlayer key={item.id} audio testId="audio-player" src={resolveMedia(item.stream_url)} live={isLive}
+                    title={item.title} artist={item.audio?.artist||item.channel?.name} artwork={resolveMedia(item.thumbnail_url)}
+                    mediaProps={mediaProps} autoPlay={audioOnDemand&&!!location.state?.autoplay} onLoadedMetadata={onLoadedMetadata} />
                 </div>
               </div>
             </div>
           ) : (
             <MediaPlayer key={item.id} testId="video-player" src={resolveMedia(item.stream_url)} poster={resolveMedia(item.thumbnail_url)}
               live={isLive} title={item.title} artist={item.channel?.name} artwork={resolveMedia(item.thumbnail_url)}
-              subtitleUrl={subtitleUrl} mediaProps={watch.mediaProps} onLoadedMetadata={onLoadedMetadata} />
+              subtitleUrl={subtitleUrl} mediaProps={mediaProps} autoPlay={!!location.state?.autoplay} onLoadedMetadata={onLoadedMetadata} />
           )}
 
           <div className="mt-6 flex items-start justify-between gap-4 flex-wrap">
@@ -193,6 +203,9 @@ export default function Watch() {
           </div>
 
           <p className="mt-6 text-gray-300 leading-relaxed max-w-3xl">{item.description}</p>
+          {item.kind==="movie"&&<FilmDetails key={item.id} item={item}/>}
+          {item.series?.key&&<SeriesEpisodes key={item.id} item={item} autoNext={autoNext} setAutoNext={setAutoNext}/>}
+          {audioOnDemand&&<AudioDetails key={item.id} item={item} queue={queueIndex>=0?queue:[]} autoNext={autoNext} setAutoNext={setAutoNext} goNext={goNext} goPrev={goPrev} nextItem={nextItem} previousItem={previousItem}/>}
 
           {item.course_id && (
             <Link to={`/learn/${item.course_id}`} data-testid="course-link"

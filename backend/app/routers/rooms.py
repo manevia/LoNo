@@ -158,7 +158,8 @@ async def invite(room_id: str, body: InviteIn, request: Request, user=Depends(ge
          "type": body.type, "location": body.location.strip(), "show_location": body.show_location,
          "token_hash": hash_key(token), "token_hint": token[-4:], "key_enc": encrypt(key),
          "expires_at": (now() + timedelta(minutes=body.expires_in_minutes)).isoformat(),
-         "state": "invited", "cue": None, "muted": False, "audio_only": False,
+         "state": "invited", "cue": None, "muted": False, "audio_only": False, "gain": 1.0,
+         "admitted": body.role != "guest",
          "created_at": now_iso(), "joined_at": None, "last_seen": None}
     await db.contributors.insert_one(dict(c))
     await audit("contributor_invited", user, target=c["id"], details={"room": r["id"], "role": body.role, "type": body.type})
@@ -174,8 +175,9 @@ async def invite(room_id: str, body: InviteIn, request: Request, user=Depends(ge
 
 
 class ContributorPatch(BaseModel):
-    action: Literal["cue", "uncue", "mute", "unmute", "remove", "show_location", "hide_location"]
+    action: Literal["cue", "uncue", "mute", "unmute", "remove", "show_location", "hide_location", "admit", "gain"]
     message: str = Field(default="", max_length=140)
+    gain: float = Field(default=1.0, ge=0, le=2)
 
 
 @router.post("/rooms/{room_id}/contributors/{cid}")
@@ -184,12 +186,16 @@ async def contributor_action(room_id: str, cid: str, body: ContributorPatch, use
     c = await db.contributors.find_one({"id": cid, "room_id": r["id"]})
     if not c or c["state"] == "removed":
         raise HTTPException(404, "Contributor not found")
+    if body.action == "admit" and c["state"] not in ("waiting", "cued", "on_air"):
+        raise HTTPException(409, "Wait for the guest to join first")
     changes = {
         "cue": {"cue": body.message or "Stand by: you're next", "state": "cued" if c["state"] != "on_air" else "on_air"},
         "uncue": {"cue": None, "state": "waiting" if c["state"] == "cued" else c["state"]},
         "mute": {"muted": True}, "unmute": {"muted": False},
         "show_location": {"show_location": True}, "hide_location": {"show_location": False},
         "remove": {"state": "removed", "cue": None},
+        "admit": {"admitted": True},
+        "gain": {"gain": body.gain},
     }[body.action]
     await db.contributors.update_one({"id": cid}, {"$set": changes})
     if body.action == "remove":
@@ -219,6 +225,22 @@ class SceneIn(BaseModel):
     scene: Literal["single", "split", "clip", "standby"]
     sources: list[str] = Field(default_factory=list, max_length=4)   # contributor ids, or "local" (producer's camera)
     clip_url: str | None = None
+    transition: Literal["cut", "dissolve", "wipe"] = "cut"
+    headline: str = Field(default="", max_length=100)
+    ticker: str = Field(default="", max_length=160)
+    accent: Literal["red", "blue", "gold"] = "red"
+
+
+class RundownItem(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    notes: str = Field(default="", max_length=500)
+    planned_seconds: int = Field(default=60, ge=1, le=86400)
+    scene: SceneIn
+
+
+class RundownIn(BaseModel):
+    revision: int = Field(default=0, ge=0)
+    items: list[RundownItem] = Field(default_factory=list, max_length=50)
 
 
 async def _set_scene(r: dict, which: str, scene: dict, reason: str = "producer"):
@@ -242,10 +264,50 @@ def _validate(scene: SceneIn):
         raise HTTPException(422, "Clips must be media uploaded to LoNo")
 
 
+async def _validate_sources(r, scene):
+    _validate(scene)
+    if len(set(scene.sources)) != len(scene.sources) or (scene.scene == "single" and len(scene.sources) != 1) or (scene.scene in ("clip", "standby") and scene.sources):
+        raise HTTPException(422, "Invalid scene source selection")
+    for cid in scene.sources:
+        if cid == "local":
+            continue
+        c = await db.contributors.find_one({"id": cid, "room_id": r["id"], "state": {"$ne": "removed"}})
+        if not c or c.get("admitted") is False or (c.get("role") == "guest" and (c["state"] not in ("waiting", "cued", "on_air") or c["expires_at"] < now_iso())):
+            raise HTTPException(409, "Admit the guest before selecting them for a scene")
+
+
+@router.put("/rooms/{room_id}/rundown")
+async def save_rundown(room_id: str, body: RundownIn, user=Depends(get_user)):
+    r = await _room(room_id, user)
+    for item in body.items:
+        await _validate_sources(r, item.scene)
+    revision_query = {"rundown_revision": body.revision} if body.revision else {"$or": [{"rundown_revision": 0}, {"rundown_revision": {"$exists": False}}]}
+    result = await db.rooms.update_one({"id": r["id"], **revision_query}, {"$set": {"rundown": [item.model_dump() for item in body.items]}, "$inc": {"rundown_revision": 1}})
+    if not result.matched_count:
+        raise HTTPException(409, "Rundown changed in another session. Reload before saving.")
+    await _event(r, "rundown.saved", count=len(body.items))
+    return await room_view(await _room(room_id, user))
+
+
+@router.post("/rooms/{room_id}/rundown/{index}/cue")
+async def cue_rundown(room_id: str, index: int, revision: int, user=Depends(get_user)):
+    r = await _room(room_id, user)
+    if revision != r.get("rundown_revision", 0):
+        raise HTTPException(409, "Rundown changed; reload before cueing")
+    items = r.get("rundown", [])
+    if not 0 <= index < len(items):
+        raise HTTPException(404, "Rundown item not found")
+    scene = SceneIn(**items[index]["scene"])
+    await _validate_sources(r, scene)
+    await _set_scene(r, "preview", scene.model_dump())
+    await _event(r, "rundown.cued", index=index, title=items[index]["title"])
+    return await room_view(r)
+
+
 @router.put("/rooms/{room_id}/preview")
 async def set_preview(room_id: str, body: SceneIn, user=Depends(get_user)):
     r = await _room(room_id, user)
-    _validate(body)
+    await _validate_sources(r, body)
     await _set_scene(r, "preview", body.model_dump())
     return await room_view(r)
 
@@ -254,6 +316,7 @@ async def set_preview(room_id: str, body: SceneIn, user=Depends(get_user)):
 async def take(room_id: str, user=Depends(get_user)):
     """Put Preview on air (the program continues; only its content changes)."""
     r = await _room(room_id, user)
+    await _validate_sources(r, SceneIn(**r["preview"]))
     await _set_scene(r, "program", dict(r["preview"]), reason="take")
     return await room_view(r)
 
@@ -262,7 +325,7 @@ async def take(room_id: str, user=Depends(get_user)):
 async def set_program(room_id: str, body: SceneIn, user=Depends(get_user)):
     """Cut straight to a scene (also used for automatic fallback when a feed drops)."""
     r = await _room(room_id, user)
-    _validate(body)
+    await _validate_sources(r, body)
     await _set_scene(r, "program", body.model_dump(), reason=body.scene)
     return await room_view(r)
 
@@ -354,7 +417,7 @@ async def join_info(token: str):
     return {"room": {"title": r["title"], "kind": r["kind"]}, "contributor": {
         "id": c["id"], "name": c["name"], "role": c["role"], "type": c["type"], "location": c["location"],
         "show_location": c["show_location"], "state": c["state"], "cue": c.get("cue"), "muted": c["muted"],
-        "audio_only": c["audio_only"], "expires_at": c["expires_at"]}, "on_air": on_air,
+        "audio_only": c["audio_only"], "admitted": c.get("admitted", True), "expires_at": c["expires_at"]}, "on_air": on_air,
         "live": bool(r.get("session_id") and await db.broadcast_sessions.find_one({"id": r["session_id"], "status": "live"}))}
 
 

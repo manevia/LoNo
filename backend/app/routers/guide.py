@@ -57,8 +57,8 @@ def _h(*parts) -> int:
 
 
 def _schedule(channel: dict, start: datetime, end: datetime) -> list[dict]:
-    if channel.get("schedule"):
-        return [p for p in channel["schedule"] if p["end"] > start.isoformat() and p["start"] < end.isoformat()]
+    if channel.get("schedule") or channel.get("station_id"):
+        return [p for p in channel.get("schedule", []) if p["end"] > start.isoformat() and p["start"] < end.isoformat()]
     pool = POOLS.get(channel.get("category"), DEFAULT_POOL)
     # Programs start on the half hour. Walk from the start of the day so slots are stable.
     t = start.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -76,6 +76,17 @@ def _schedule(channel: dict, start: datetime, end: datetime) -> list[dict]:
 async def _channels():
     tv = await db.content.find({"kind": "live_tv"}, {"_id": 0, "subtitles_vtt": 0, "transcript": 0}).to_list(200)
     radio = await db.content.find({"kind": "live_radio"}, {"_id": 0, "subtitles_vtt": 0, "transcript": 0}).to_list(200)
+    # Actual creator schedules replace synthetic legacy guide slots when a permanent
+    # station exists. Keep playback IDs identical to the existing live player.
+    channel_ids = list({c["channel_id"] for c in tv + radio if c.get("channel_id")})
+    rows = await db.stations.find({"channel_id": {"$in": channel_ids}, "hidden": {"$ne": True}}, {"_id": 0}).to_list(400)
+    lookup = {(s["channel_id"], s["kind"]): s for s in rows}
+    for c in tv + radio:
+        s = lookup.get((c.get("channel_id"), c["kind"])) if c.get("broadcast_session_id") else None
+        if s:
+            c["station_id"] = s["id"]
+            c["station_name"] = s["name"]
+            c["schedule"] = s.get("programmes", [])
     # Stable numbering: oldest channels keep the low numbers, new ones are added at the end.
     for group in (tv, radio):
         group.sort(key=lambda c: (c.get("created_at", ""), c["title"]))

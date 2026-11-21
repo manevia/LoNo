@@ -2,7 +2,10 @@
 
 Admins are set with ADMIN_EMAILS (or role=admin in the database); there's no
 endpoint that grants admin rights, so nobody can promote themselves."""
+import asyncio
 import csv
+import os
+import shutil
 import io
 import re
 from datetime import timedelta
@@ -27,6 +30,119 @@ class ResolveIn(BaseModel):
 
 class ReasonIn(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
+
+
+@router.get("/broadcasts")
+async def broadcast_center(admin=Depends(get_admin)):
+    from .. import config
+    from ..broadcast import abr, media
+    from ..broadcast.relays import manager
+    from . import broadcast as bc
+
+    active_query = {"status": {"$in": list(bc.ACTIVE)}}
+    projection = {k: 1 for k in ("id", "owner_id", "title", "kind", "visibility", "status", "created_at",
+                                 "started_at", "ended_at", "content_id", "last_content_id", "recording_id", "moderation_reason", "ingest_id")}
+    projection["_id"] = 0
+    active = await db.broadcast_sessions.find(active_query, projection).sort("created_at", -1).to_list(50)
+    history = await db.broadcast_sessions.find({"status": "ended"}, projection).sort("ended_at", -1).to_list(100)
+    recordings = await db.recordings.find({}, {"_id": 0, "id": 1, "owner_id": 1, "title": 1, "status": 1,
+         "visibility": 1, "duration_sec": 1, "size": 1, "created_at": 1, "moderation_hold": 1}).sort("created_at", -1).to_list(100)
+    ids = list({s["owner_id"] for s in active + history + recordings})
+    owners = {u["id"]: u.get("name", "Member") for u in await db.users.find({"id": {"$in": ids}}, {"id": 1, "name": 1}).to_list(len(ids) or 1)}
+    content_ids = [s.get("content_id") or s.get("last_content_id") for s in active + history]
+    audience = {r["_id"]: r["count"] async for r in db.watch_sessions.aggregate([
+        {"$match": {"content_id": {"$in": [i for i in content_ids if i]}}},
+        {"$group": {"_id": "$content_id", "count": {"$sum": 1}}}])}
+    sem = asyncio.Semaphore(5)
+
+    async def health(s):
+        async with sem:
+            feed = await media.path_info(f"live/{s['ingest_id']}") if config.MEDIA_ENABLED else None
+        relays = manager.get(s["id"])
+        s["feed"] = {k: feed.get(k) for k in ("ready", "tracks", "bitrate_kbps")} if feed else None
+        s["adaptive"] = bc._adaptive_status(s, relays)
+        s["recorder_state"] = (relays.get("recorder") or {}).get("state")
+
+    await asyncio.gather(*(health(s) for s in active))
+    for s in active + history:
+        cid = s.pop("content_id", None) or s.pop("last_content_id", None)
+        s.pop("last_content_id", None)
+        s.pop("ingest_id", None)
+        s["watch_starts"] = audience.get(cid, 0) if cid and s.get("visibility") == "public" else None
+        s["owner_name"] = owners.get(s["owner_id"], "Former member")
+    for r in recordings:
+        r["owner_name"] = owners.get(r["owner_id"], "Former member")
+    encoders = len(bc._adaptive_running())
+    limit, reason = abr.capacity(encoders) if abr.enabled() else (0, "Adaptive encoding disabled")
+    try:
+        disk_free_gib = round(shutil.disk_usage(config.RECORDINGS_DIR).free / 1024**3, 1)
+    except OSError:
+        disk_free_gib = None
+    return {"active": active, "history": history, "recordings": recordings, "as_of": now_iso(),
+            "live_count": await db.broadcast_sessions.count_documents({"status": "live"}),
+            "open_count": await db.broadcast_sessions.count_documents(active_query),
+            "resources": {"media_enabled": config.MEDIA_ENABLED, "encoders": encoders, "encoder_limit": limit,
+                          "admission_reason": reason, "disk_free_gib": disk_free_gib,
+                          "cpu_load_1m": round(os.getloadavg()[0], 2) if hasattr(os, "getloadavg") else None}}
+
+
+@router.post("/broadcasts/{session_id}/end")
+async def moderate_broadcast(session_id: str, body: ReasonIn, admin=Depends(get_admin)):
+    from .broadcast import stop_session_for, ACTIVE
+    s = await db.broadcast_sessions.find_one({"id": session_id, "status": {"$in": list(ACTIVE)}})
+    if not s:
+        raise HTTPException(404, "No open broadcast with this ID")
+    reason = body.reason.strip()
+    if len(reason) < 3:
+        raise HTTPException(422, "Enter a moderation reason")
+    await stop_session_for({"id": s["owner_id"]}, session_id)
+    await db.broadcast_sessions.update_one({"id": session_id}, {"$set": {"moderation_reason": reason}})
+    await audit("broadcast_moderated", admin, target=session_id, details={"reason": reason})
+    return {"ok": True}
+
+
+class BroadcastPermissionIn(ReasonIn):
+    blocked: bool
+
+
+@router.post("/users/{user_id}/broadcast-permission")
+async def broadcast_permission(user_id: str, body: BroadcastPermissionIn, admin=Depends(get_admin)):
+    u = await db.users.find_one({"id": user_id})
+    if not u:
+        raise HTTPException(404, "User not found")
+    if is_admin(u):
+        raise HTTPException(400, "Admin broadcasting permissions cannot be changed here")
+    if len(body.reason.strip()) < 3:
+        raise HTTPException(422, "Enter a reason")
+    if body.blocked and await db.broadcast_sessions.find_one({"owner_id": user_id, "status": {"$in": ["live", "created"]}}):
+        raise HTTPException(409, "End this creator's open sessions first")
+    await db.users.update_one({"id": user_id}, {"$set": {"broadcast_blocked": body.blocked}})
+    await audit("broadcast_permission_changed", admin, target=user_id, details={"blocked": body.blocked, "reason": body.reason.strip()})
+    return {"ok": True}
+
+
+@router.post("/recordings/{recording_id}/hold")
+async def hold_recording(recording_id: str, body: ReasonIn, admin=Depends(get_admin)):
+    r = await db.recordings.find_one({"id": recording_id})
+    if not r:
+        raise HTTPException(404, "Recording not found")
+    if len(body.reason.strip()) < 3:
+        raise HTTPException(422, "Enter a reason")
+    await db.recordings.update_one({"id": recording_id}, {"$set": {"moderation_hold": True, "visibility": "private", "publish_at": None, "content_id": None}})
+    await db.content.delete_many({"recording_id": recording_id})
+    await audit("recording_held", admin, target=recording_id, details={"reason": body.reason.strip()})
+    return {"ok": True}
+
+
+@router.post("/recordings/{recording_id}/release")
+async def release_recording(recording_id: str, body: ReasonIn, admin=Depends(get_admin)):
+    if len(body.reason.strip()) < 3:
+        raise HTTPException(422, "Enter a reason")
+    result = await db.recordings.update_one({"id": recording_id, "moderation_hold": True}, {"$set": {"moderation_hold": False}})
+    if not result.matched_count:
+        raise HTTPException(404, "No held recording with this ID")
+    await audit("recording_released", admin, target=recording_id, details={"reason": body.reason.strip()})
+    return {"ok": True}
 
 
 @router.get("/overview")

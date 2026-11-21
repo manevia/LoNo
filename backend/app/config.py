@@ -127,7 +127,7 @@ def features() -> dict:
     return {
         "ai": bool(ANTHROPIC_API_KEY),
         "transcription": bool(TRANSCRIBE_API_KEY),
-        "payments": bool(STRIPE_API_KEY),
+        "payments": bool(STRIPE_API_KEY and STRIPE_WEBHOOK_SECRET),
         "google_client_id": GOOGLE_CLIENT_ID or None,
         "simulated_token_purchase": SIMULATED_TOKEN_PURCHASE,
         "pilot_mode": PILOT_MODE,
