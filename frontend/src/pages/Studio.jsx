@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { uploadFile, uploadError } from "@/lib/upload";
 import StudioCourses from "@/components/StudioCourses";
+import CreatorProfile from "@/components/CreatorProfile";
 
 const Stat = ({ icon: Icon, label, value, hint, color = "text-white" }) => (
   <div className="p-6 rounded-2xl bg-[#121212] border border-white/10">
@@ -131,8 +132,8 @@ export default function Studio() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat icon={Users} label="Subscribers" value={dash.stats.subscribers.toLocaleString()} hint="Total followers" />
         <Stat icon={Eye} label="Total Views" value={dash.stats.total_views.toLocaleString()} hint="Across all uploads" />
-        <Stat icon={DollarSign} label="Revenue" value={`$${dash.stats.revenue_usd.toLocaleString()}`} hint="This month" color="text-[#34C759]" />
-        <Stat icon={Coins} label="$LONO Earned" value={dash.stats.lono_earned.toLocaleString()} hint="Creator rewards" color="text-[#FFB000]" />
+        <Stat icon={DollarSign} label="Estimated revenue" value={`$${dash.stats.revenue_usd.toLocaleString()}`} hint="Illustrative estimate, not payable balance" color="text-[#34C759]" />
+        <Stat icon={Coins} label="Estimated $LONO" value={dash.stats.lono_earned.toLocaleString()} hint="Illustrative estimate, not credited rewards" color="text-[#FFB000]" />
       </div>
 
       <div className="mt-8 p-6 rounded-2xl bg-[#121212] border border-white/10">
@@ -148,6 +149,7 @@ export default function Studio() {
         </ResponsiveContainer>
       </div>
 
+      <CreatorProfile onSaved={load}/>
       <StudioCourses />
 
       <div className="mt-10">

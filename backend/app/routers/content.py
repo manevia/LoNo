@@ -70,7 +70,7 @@ async def get_content(content_id: str, user=Depends(get_user_optional)):
         offer = await db.campaigns.find_one({"replay_content_id": content_id, "status": {"$in": ["open", "paused", "closed"]}}, {"id": 1})
         c["offer_id"] = (offer or {}).get("id")
     c["has_subtitles"] = bool(await db.content.count_documents({"id": content_id, "subtitles_vtt": {"$exists": True}}))
-    c["channel"] = await db.channels.find_one({"id": c.get("channel_id")}, {"_id": 0}) if c.get("channel_id") else None
+    c["channel"] = await db.channels.find_one({"id": c.get("channel_id")}, {"_id": 0, "creator_profile":0,"verification_reason":0,"creator_revision":0,"verification_submitted_at":0,"verification_reviewed_at":0}) if c.get("channel_id") else None
     c["similar"] = await db.content.find(
         {"category": c["category"], "id": {"$ne": content_id}}, P).limit(8).to_list(8)
     if len(c["similar"]) < 4:
@@ -176,12 +176,12 @@ async def clear_history(user=Depends(get_user)):
 
 @router.get("/channels")
 async def list_channels():
-    return await db.channels.find({}, {"_id": 0}).to_list(200)
+    return await db.channels.find({}, {"_id": 0, "creator_profile":0,"verification_reason":0,"creator_revision":0,"verification_submitted_at":0,"verification_reviewed_at":0}).to_list(200)
 
 
 @router.get("/channels/{channel_id}")
 async def get_channel(channel_id: str, user=Depends(get_user_optional)):
-    ch = await db.channels.find_one({"id": channel_id}, {"_id": 0})
+    ch = await db.channels.find_one({"id": channel_id}, {"_id": 0, "creator_profile":0,"verification_reason":0,"creator_revision":0,"verification_submitted_at":0,"verification_reviewed_at":0})
     if not ch:
         raise HTTPException(404, "Channel not found")
     ch["content"] = await db.content.find({"channel_id": channel_id}, P).to_list(200)

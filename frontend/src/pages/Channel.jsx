@@ -38,9 +38,11 @@ export default function Channel() {
       </div>
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 -mt-16 relative">
         <div className="flex items-end gap-6">
-          <img loading="lazy" decoding="async" src={ch.avatar_url} alt="" className="w-24 h-24 md:w-32 md:h-32 rounded-2xl ring-4 ring-[#050505] bg-white/10" />
+          <img loading="lazy" decoding="async" src={resolveMedia(ch.avatar_url)} alt="" className="w-24 h-24 md:w-32 md:h-32 rounded-2xl ring-4 ring-[#050505] bg-white/10" />
           <div className="pb-4">
             <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight">{ch.name}</h1>
+            {ch.verification_status==="verified"&&<span className="text-xs text-green-300">✓ Verified creator</span>}
+            {ch.creator_classification&&<p className="text-xs text-gray-400 capitalize">{ch.creator_classification} creator · {ch.verification_status==="verified"?"Verified":"Self-declared"}</p>}
             <div className="text-sm text-gray-400 flex items-center gap-3">
               <span>{ch.handle}</span>
               <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {ch.subscribers?.toLocaleString()}</span>

@@ -142,6 +142,7 @@ app = FastAPI(title="LoNo API", version=VERSION, lifespan=lifespan, docs_url="/a
 api = APIRouter(prefix="/api")
 for r in (auth, account, admin, broadcast, rooms, guide, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn, stations):
     api.include_router(r.router)
+api.include_router(creator.review_router)
 
 
 @api.get("/")
