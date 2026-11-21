@@ -362,6 +362,11 @@ async def add_programme(station_id: str, body: ProgrammeIn, user=Depends(get_use
     if user.get("broadcast_blocked"):
         raise HTTPException(403, "Your broadcasting permission is restricted")
     s = await _owned(station_id, user)
+    return await add_programme_to_station(s,body,user)
+
+
+async def add_programme_to_station(s, body: ProgrammeIn, actor):
+    station_id=s["id"]
     slots = expand_programmes(body)
     if body.playlist:
         if body.format != "prerecorded" or body.file_id or not s.get("playlist_items"):
@@ -382,7 +387,7 @@ async def add_programme(station_id: str, body: ProgrammeIn, user=Depends(get_use
     result = await db.stations.update_one({"id": station_id, "revision": s["revision"]}, {"$set": {"programmes": sorted(items + slots, key=lambda x: x["start"])}, "$inc": {"revision": 1}})
     if not result.matched_count:
         raise HTTPException(409, "Schedule changed; refresh and retry")
-    await audit("station_programmes_added", user, target=station_id, details={"count": len(slots)})
+    await audit("station_programmes_added", actor, target=station_id, details={"count": len(slots)})
     return {**slots[0], "occurrences_created": len(slots)}
 
 

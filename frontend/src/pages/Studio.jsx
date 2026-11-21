@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { uploadFile, uploadError } from "@/lib/upload";
 import StudioCourses from "@/components/StudioCourses";
 import CreatorProfile from "@/components/CreatorProfile";
+import ChannelTeams from "@/components/ChannelTeams";
 
 const Stat = ({ icon: Icon, label, value, hint, color = "text-white" }) => (
   <div className="p-6 rounded-2xl bg-[#121212] border border-white/10">
@@ -150,6 +151,7 @@ export default function Studio() {
       </div>
 
       <CreatorProfile onSaved={load}/>
+      <ChannelTeams/>
       <StudioCourses />
 
       <div className="mt-10">
