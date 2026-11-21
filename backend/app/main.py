@@ -111,6 +111,7 @@ async def lifespan(app: FastAPI):
             except asyncio.TimeoutError:
                 pass
     tasks.append(asyncio.create_task(repair_loop()))
+    tasks.append(asyncio.create_task(stations.monitor_stations(stop)))
     if config.MEDIA_ENABLED:
         from .broadcast import media
         from .broadcast.relays import manager

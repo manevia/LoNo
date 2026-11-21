@@ -1,4 +1,6 @@
 """Permanent stations with clock-synchronised, viewer-side scheduled playout."""
+import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
@@ -224,10 +226,14 @@ async def _decorate(stations, *, private=False):
         upcoming = next((p for p in programmes if p["start"] > t), None)
         stream_url = published.get(active["content_id"]) if active else None
         source = playout(s, active, stream_url, current, upcoming, files, t) if visible else None
+        fallback = files.get(s.get("fallback_file_id"))
+        recovery = None
+        if visible and s.get("automation_enabled") and eligible_file(fallback, s):
+            recovery = {"url": "/api/files/" + fallback["storage_path"], "anchor": s.get("automation_anchor") or s["created_at"]}
         view = {k: s.get(k) for k in ("id", "kind", "name", "description", "logo_url", "banner_url", "category", "channel_id")}
         view.update({"on_air": bool(active or source), "live_content_id": active.get("content_id") if active else None,
                      "live_title": active.get("title") if active else (source or {}).get("title"), "programmes": programmes if private else programmes[:30],
-                     "playout": source, "as_of": t,
+                     "playout": source, "recovery": recovery, "as_of": t,
                      "now": next((p for p in programmes if p["start"] <= t < p["end"]), None),
                      "next": next((p for p in programmes if p["start"] > t), None)})
         if private:
@@ -236,6 +242,73 @@ async def _decorate(stations, *, private=False):
             view.update({"playlist_items": s.get("playlist_items", []), "playlist_continuous": bool(s.get("playlist_continuous"))})
         result.append(view)
     return result
+
+
+async def source_health(view):
+    source = view.get("playout")
+    if not source:
+        return "off_air"
+    if source["mode"] == "live":
+        return "live_session"  # encoder monitoring is in Live Broadcast Management
+    if not source["url"].startswith("/api/files/uploads/"):
+        return "unknown"
+    try:
+        exists = await asyncio.wait_for(storage.exists(source["url"].removeprefix("/api/files/")), timeout=5)
+        return "media_available" if exists else "media_missing"
+    except Exception:
+        return "storage_unreachable"
+
+
+async def monitor_stations(stop):
+    """Sample configured sources; never represent a clock sample as confirmed delivery."""
+    offset = 0
+    while not stop.is_set():
+        try:
+            rows = await db.stations.find({}, {"_id": 0}).sort("id", 1).skip(offset).limit(100).to_list(100)
+            offset = offset + len(rows) if len(rows) == 100 else 0
+            for view in await _decorate(rows, private=True):
+                stamp = now()
+                source = view.get("playout") or {}
+                bucket = int(stamp.timestamp()) // 30
+                sample = {"station_id": view["id"], "at": stamp.isoformat(), "expires_at": stamp + timedelta(days=7),
+                          "status": await source_health(view), "mode": source.get("mode", "off_air"),
+                          "title": source.get("title"), "item_kind": source.get("item_kind")}
+                await db.station_samples.update_one({"_id": f"{view['id']}:{bucket}"}, {"$setOnInsert": sample}, upsert=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.getLogger("lono").exception("Station monitoring sample failed")
+        try:
+            await asyncio.wait_for(stop.wait(), 30)
+        except asyncio.TimeoutError:
+            pass
+
+
+@router.post("/stations/{station_id}/audience-heartbeat")
+async def station_audience_heartbeat(station_id: str, user=Depends(get_user)):
+    station = await db.stations.find_one({"id": station_id, "hidden": {"$ne": True}}, {"_id": 0})
+    views = await _decorate([station] if station else [])
+    if not views:
+        raise HTTPException(404, "Station not found")
+    if not views[0].get("playout"):
+        return {"ok": False}
+    stamp = now()
+    key = str(uuid5(NAMESPACE_URL, f"lono:audience:{station_id}:{user['id']}:{stamp.date()}"))
+    await db.station_audience.update_one({"_id": key}, {"$set": {"station_id": station_id, "last_seen": stamp.isoformat(), "expires_at": stamp + timedelta(days=2)}, "$setOnInsert": {"day": stamp.date().isoformat()}}, upsert=True)
+    return {"ok": True}
+
+
+@router.get("/creator/stations/{station_id}/monitoring")
+async def station_monitoring(station_id: str, user=Depends(get_user)):
+    s = await _owned(station_id, user)
+    view = (await _decorate([s], private=True))[0]
+    stamp = now()
+    samples = await db.station_samples.find({"station_id": station_id}, {"_id": 0, "expires_at": 0}).sort("at", -1).limit(100).to_list(100)
+    audience = await db.station_audience.count_documents({"station_id": station_id, "last_seen": {"$gte": (stamp-timedelta(seconds=90)).isoformat()}})
+    daily = await db.station_audience.count_documents({"station_id": station_id, "day": stamp.date().isoformat()})
+    commercial = await db.station_samples.count_documents({"station_id": station_id, "item_kind": "commercial", "status": "media_available", "at": {"$gte": (stamp-timedelta(days=1)).isoformat()}})
+    return {"status": await source_health(view), "as_of": stamp.isoformat(), "playout": view.get("playout"),
+            "recent_signed_in_accounts": audience, "today_signed_in_accounts": daily, "commercial_samples_24h": commercial, "samples": samples}
 
 
 @router.get("/stations")

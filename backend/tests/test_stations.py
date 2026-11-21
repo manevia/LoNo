@@ -5,6 +5,24 @@ from app.util import now
 from test_broadcast import media_on
 
 
+def test_monitoring_and_audience_access(client, user, admin):
+    h = user["h"]
+    sid = client.put("/api/creator/stations/live_radio", headers=h, json={"name":"Monitored radio"}).json()["id"]
+    root = f"/api/creator/stations/{sid}"
+    public = f"/api/stations/{sid}/audience-heartbeat"
+    assert client.get(root+"/monitoring",headers=admin["h"]).status_code == 404
+    assert client.post(public).status_code == 401
+    assert client.post(public,headers=h).json()["ok"] is False
+    assert client.get(root+"/monitoring",headers=h).json()["status"] == "off_air"
+    fid = client.post("/api/storage/upload", headers=h, files={"file":("ident.mp3",b"test", "audio/mpeg")}).json()["file_id"]
+    assert client.put(root+"/automation",headers=h,json={"enabled":True,"fallback_file_id":fid}).status_code == 200
+    assert client.post(public,headers=h).status_code == 200
+    assert client.post(public,headers=h).status_code == 200
+    result = client.get(root+"/monitoring",headers=h).json()
+    assert result["today_signed_in_accounts"] == 1 and result["recent_signed_in_accounts"] == 1
+    assert client.get(root+"/monitoring",headers=h).json()["status"] == "media_available"
+
+
 def test_playlist_clock_and_fallback():
     from app.routers.stations import playout
     t = now()
