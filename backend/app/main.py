@@ -15,7 +15,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import account, admin, ai, audio, auth, broadcast, campaigns, creator_api, rooms, content, creator, creator_courses, editorial, files, governance, guide, learn, payments, stations, teams, wallet, watch
+from .routers import account, admin, ai, audio, auth, broadcast, campaigns, creator_api, rooms, content, creator, creator_courses, discovery, editorial, files, governance, guide, learn, payments, stations, teams, wallet, watch
 from .admin_setup import bootstrap_admins
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LoNo API", version=VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
 api = APIRouter(prefix="/api")
-for r in (auth, account, admin, audio, broadcast, rooms, guide, content, watch, creator, creator_courses, editorial, wallet, governance, ai, payments, files, learn, stations, teams):
+for r in (auth, account, admin, audio, broadcast, rooms, guide, content, watch, creator, creator_courses, discovery, editorial, wallet, governance, ai, payments, files, learn, stations, teams):
     api.include_router(r.router)
 api.include_router(creator.review_router)
 api.include_router(editorial.moderation)
@@ -195,7 +195,9 @@ async def security_headers(request, call_next):
     resp = await call_next(request)
     h = resp.headers
     h.setdefault("X-Content-Type-Options", "nosniff")          # no MIME sniffing of uploads
-    h.setdefault("X-Frame-Options", "DENY")                    # no clickjacking via iframes
+    # The public, script-free opt-in player is the sole frameable endpoint.
+    if not (request.url.path.startswith("/api/discovery/embed/") and resp.status_code==200 and h.get("Content-Security-Policy")==discovery.EMBED_CSP):
+        h.setdefault("X-Frame-Options", "DENY")
     h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     # Camera/mic/screen only for LoNo itself (Live Studio); never for embedded third parties.
     h.setdefault("Permissions-Policy", "camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(self)")

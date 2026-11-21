@@ -10,6 +10,7 @@ import ContentCard from "@/components/ContentCard";
 import FilmDetails from "@/components/FilmDetails";
 import SeriesEpisodes from "@/components/SeriesEpisodes";
 import AudioDetails from "@/components/AudioDetails";
+import {embedCode,copyDistribution} from "@/components/DistributionTools";
 import MediaPlayer from "@/components/MediaPlayer";
 import TvVodPlayer from "@/components/tv/TvVodPlayer";
 import { usePrefs } from "@/lib/device";
@@ -193,6 +194,7 @@ export default function Watch() {
                 {viewer.in_list ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />} My list
               </button>
               <button onClick={share} className={pill}><Share2 className="w-4 h-4" /> Share</button>
+              {item.embeddable&&!isLive&&<button onClick={()=>copyDistribution(embedCode(item.id))} className={pill}>Copy embed code</button>}
               {(cfg.transcription || subtitleUrl) && !isAudio && (
                 <button data-testid="captions-btn" onClick={generateCaptions} disabled={transcribing || !!subtitleUrl} className={pill}>
                   {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Captions className="w-4 h-4" />}

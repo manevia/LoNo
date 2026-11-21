@@ -14,6 +14,7 @@ import { uploadFile, uploadError } from "@/lib/upload";
 import StudioCourses from "@/components/StudioCourses";
 import CreatorProfile from "@/components/CreatorProfile";
 import ChannelTeams from "@/components/ChannelTeams";
+import DistributionTools from "@/components/DistributionTools";
 
 const Stat = ({ icon: Icon, label, value, hint, color = "text-white" }) => (
   <div className="p-6 rounded-2xl bg-[#121212] border border-white/10">
@@ -152,6 +153,7 @@ export default function Studio() {
 
       <CreatorProfile onSaved={load}/>
       <ChannelTeams/>
+      <DistributionTools channelId={dash.channel.id}/>
       <StudioCourses />
 
       <div className="mt-10">

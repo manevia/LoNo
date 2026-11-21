@@ -1,5 +1,5 @@
-import random
 import re
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -7,6 +7,7 @@ from typing import Literal
 
 from ..db import db
 from ..security import get_user, get_user_optional
+from ..util import now
 from .audio import CARD as AUDIO_CARD, AVAILABLE as AUDIO_AVAILABLE
 
 router = APIRouter(tags=["content"])
@@ -76,12 +77,13 @@ async def home_rails(user=Depends(get_user_optional)):
     def pick(pred, n=12):
         return [c for c in items if pred(c)][:n]
 
-    rng = random.Random(len(items))  # stable "trending" per catalogue
     by_views = sorted(items, key=lambda c: c.get("views", 0), reverse=True)
+    recent=await db.watch_sessions.aggregate([{"$match":{"started_at":{"$gte":(now()-timedelta(days=7)).isoformat()}}},{"$group":{"_id":"$content_id","starts":{"$sum":1}}},{"$sort":{"starts":-1,"_id":1}},{"$limit":40}]).to_list(40)
+    trending=[by_id[r["_id"]] for r in recent if r["_id"] in by_id and not by_id[r["_id"]].get("gated")][:12]
     rails = [
         {"key": "featured", "title": "Featured today", "items": pick(lambda c: c.get("is_original"), 8)},
-        {"key": "trending", "title": "Trending now", "items": rng.sample(items, min(12, len(items)))},
-        {"key": "top10", "title": "Top 10 this week", "items": by_views[:10]},
+        {"key": "trending", "title": "Popular this week · watch starts", "items": trending},
+        {"key": "top10", "title": "Most viewed titles", "items": by_views[:10]},
         {"key": "originals", "title": "LoNo Originals", "items": pick(lambda c: c.get("is_original"))},
         {"key": "new", "title": "New releases",
          "items": sorted(items, key=lambda c: c.get("created_at", ""), reverse=True)[:12]},

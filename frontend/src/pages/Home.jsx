@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import HeroBanner from "@/components/HeroBanner";
 import ContentRail from "@/components/ContentRail";
+import DiscoveryHighlights from "@/components/DiscoveryHighlights";
+import {usePrefs} from "@/lib/device";
 import { Film, Tv, Radio, GraduationCap, Music, Mic, ArrowRight, Loader2 } from "lucide-react";
 
 const categories = [
@@ -50,6 +52,7 @@ function Welcome({ status, retry }) {
 }
 
 export default function Home() {
+  const {dataSaver}=usePrefs();
   const [rails, setRails] = useState([]);
   const [status, setStatus] = useState("loading");
   const [attempt, setAttempt] = useState(0);
@@ -93,6 +96,7 @@ export default function Home() {
           />
         ))}
       </div>}
+      <section className="max-w-[1600px] mx-auto px-4 md:px-8 pb-24 space-y-5"><div className="flex flex-wrap justify-between items-center gap-3"><h2 className="font-display text-3xl">Discover LoNo</h2><Link to="/search" className="rounded-full bg-[#FF3B30] px-5 py-2 text-sm">Explore all media</Link></div><DiscoveryHighlights lite={dataSaver}/></section>
     </div>
   );
 }
