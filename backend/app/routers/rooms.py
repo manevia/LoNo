@@ -225,6 +225,22 @@ class SceneIn(BaseModel):
     scene: Literal["single", "split", "clip", "standby"]
     sources: list[str] = Field(default_factory=list, max_length=4)   # contributor ids, or "local" (producer's camera)
     clip_url: str | None = None
+    transition: Literal["cut", "dissolve", "wipe"] = "cut"
+    headline: str = Field(default="", max_length=100)
+    ticker: str = Field(default="", max_length=160)
+    accent: Literal["red", "blue", "gold"] = "red"
+
+
+class RundownItem(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    notes: str = Field(default="", max_length=500)
+    planned_seconds: int = Field(default=60, ge=1, le=86400)
+    scene: SceneIn
+
+
+class RundownIn(BaseModel):
+    revision: int = Field(default=0, ge=0)
+    items: list[RundownItem] = Field(default_factory=list, max_length=50)
 
 
 async def _set_scene(r: dict, which: str, scene: dict, reason: str = "producer"):
@@ -258,6 +274,34 @@ async def _validate_sources(r, scene):
         c = await db.contributors.find_one({"id": cid, "room_id": r["id"], "state": {"$ne": "removed"}})
         if not c or c.get("admitted") is False or (c.get("role") == "guest" and (c["state"] not in ("waiting", "cued", "on_air") or c["expires_at"] < now_iso())):
             raise HTTPException(409, "Admit the guest before selecting them for a scene")
+
+
+@router.put("/rooms/{room_id}/rundown")
+async def save_rundown(room_id: str, body: RundownIn, user=Depends(get_user)):
+    r = await _room(room_id, user)
+    for item in body.items:
+        await _validate_sources(r, item.scene)
+    revision_query = {"rundown_revision": body.revision} if body.revision else {"$or": [{"rundown_revision": 0}, {"rundown_revision": {"$exists": False}}]}
+    result = await db.rooms.update_one({"id": r["id"], **revision_query}, {"$set": {"rundown": [item.model_dump() for item in body.items]}, "$inc": {"rundown_revision": 1}})
+    if not result.matched_count:
+        raise HTTPException(409, "Rundown changed in another session. Reload before saving.")
+    await _event(r, "rundown.saved", count=len(body.items))
+    return await room_view(await _room(room_id, user))
+
+
+@router.post("/rooms/{room_id}/rundown/{index}/cue")
+async def cue_rundown(room_id: str, index: int, revision: int, user=Depends(get_user)):
+    r = await _room(room_id, user)
+    if revision != r.get("rundown_revision", 0):
+        raise HTTPException(409, "Rundown changed; reload before cueing")
+    items = r.get("rundown", [])
+    if not 0 <= index < len(items):
+        raise HTTPException(404, "Rundown item not found")
+    scene = SceneIn(**items[index]["scene"])
+    await _validate_sources(r, scene)
+    await _set_scene(r, "preview", scene.model_dump())
+    await _event(r, "rundown.cued", index=index, title=items[index]["title"])
+    return await room_view(r)
 
 
 @router.put("/rooms/{room_id}/preview")

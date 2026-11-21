@@ -132,3 +132,18 @@ def test_guest_explicit_admission_and_panel(client, media_on):
     assert not client.get(f"/api/join/{token}").json()["on_air"]
     assert client.post(root+"/take",headers=u["h"]).status_code == 200
     assert client.get(f"/api/join/{token}").json()["on_air"]
+
+
+def test_rundown_revision_cue_and_take(client, media_on):
+    u = make_user(client); r = room(client, u); root = f"/api/rooms/{r['id']}"
+    item = {"title":"Opening", "notes":"Private note", "planned_seconds":30,
+            "scene":{"scene":"standby","headline":"Welcome", "transition":"dissolve","accent":"blue"}}
+    result = client.put(root+"/rundown",headers=u["h"],json={"revision":0,"items":[item]})
+    assert result.status_code == 200 and result.json()["rundown_revision"] == 1
+    assert client.put(root+"/rundown",headers=u["h"],json={"revision":0,"items":[]}).status_code == 409
+    assert client.post(root+"/rundown/0/cue?revision=0",headers=u["h"]).status_code == 409
+    cue = client.post(root+"/rundown/0/cue?revision=1",headers=u["h"]).json()
+    assert cue["preview"]["headline"] == "Welcome" and not cue["program"].get("headline")
+    assert client.post(root+"/take",headers=u["h"]).json()["program"]["transition"] == "dissolve"
+    stranger = make_user(client)
+    assert client.put(root+"/rundown",headers=stranger["h"],json={"revision":1,"items":[]}).status_code == 404

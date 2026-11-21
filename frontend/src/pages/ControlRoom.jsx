@@ -7,6 +7,7 @@ import { useConfig } from "@/lib/config";
 import { Compositor } from "@/lib/compositor";
 import { publishWhip, playWhep } from "@/lib/whip";
 import DestinationsPanel from "@/components/studio/DestinationsPanel";
+import ProductionRundown from "@/components/studio/ProductionRundown";
 
 const card = "rounded-2xl bg-[#121212] border border-white/10";
 const chip = "inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-40";
@@ -115,6 +116,7 @@ function Room({ roomId }) {
   const [local,setLocal]=useState(null);
   const [localMuted,setLocalMuted]=useState(false);
   const [hostMonitor,setHostMonitor]=useState(false);
+  const [effectFile,setEffectFile]=useState(null),[effectVolume,setEffectVolume]=useState(0.7);
   const hostAudio=useRef(null);
   const localRef=useRef(null);
   const programRef = useRef(null), previewRef = useRef(null), comp = useRef(null);
@@ -288,6 +290,8 @@ function Room({ roomId }) {
         <label className="ml-auto flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={autoFallback} onChange={(e) => setAutoFallback(e.target.checked)} className="accent-[#FF3B30]" /> If an on-air feed drops, go to the anchor (or standby)</label>
       </div>
 
+      <div className="mt-4"><ProductionRundown key={room.id} room={room} refresh={load}/></div>
+      <section className={`${card} p-4 mt-4 space-y-3`}><h2 className="font-display text-lg">Sound effects & jingles</h2><p className="text-xs text-gray-400">Select an authorized local audio file. Play sends it immediately to the programme mix, including any active broadcast.</p><label className="block">Sound effect file<input type="file" accept="audio/*" className={field} onChange={e=>setEffectFile(e.target.files?.[0]||null)}/></label><label className="block">Effect volume · {Math.round(effectVolume*100)}%<input type="range" min={0} max={1} step={0.05} value={effectVolume} onChange={e=>setEffectVolume(Number(e.target.value))}/></label><div className="flex gap-2"><button className={chip} disabled={!effectFile} onClick={()=>comp.current?.playEffect(effectFile,effectVolume).catch(e=>toast.error(e.message||"Unable to play sound"))}>Play effect to programme</button><button className={chip} onClick={()=>comp.current?.stopEffect()}>Stop effect</button></div></section>
       <div className="mt-4 grid xl:grid-cols-[1fr_380px] gap-4">
         {/* Sources */}
         <div>
