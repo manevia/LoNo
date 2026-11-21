@@ -7,6 +7,7 @@ import { useConfig } from "@/lib/config";
 import { publishWhip } from "@/lib/whip";
 import MediaPlayer from "@/components/MediaPlayer";
 import DevicesPanel from "@/components/studio/DevicesPanel";
+import ProductionPanel from "@/components/studio/ProductionPanel";
 import EncoderPanel from "@/components/studio/EncoderPanel";
 import DestinationsPanel from "@/components/studio/DestinationsPanel";
 import RecordingsPanel from "@/components/studio/RecordingsPanel";
@@ -32,6 +33,8 @@ export default function LiveStudio() {
   const cfg = useConfig();
   const [mode, setMode] = useState(() => localStorage.getItem("lono_studio_mode") || "device");
   const [tracks, setTracks] = useState({ video: null, audio: null });
+  const [rawTracks, setRawTracks] = useState({video:null,audio:null});
+  const [production, setProduction] = useState(false);
   const [session, setSession] = useState(undefined);
   const [events, setEvents] = useState([]);
   const [selected, setSelected] = useState(() => { try { return JSON.parse(localStorage.getItem("lono_studio_dests") || "[]"); } catch { return []; } });
@@ -64,8 +67,10 @@ export default function LiveStudio() {
   // Switching camera or mic while sending replaces the track without reconnecting.
   const onTracks = useCallback((t) => {
     setTracks(t);
-    if (pub.current) { pub.current.replace("video", t.video); pub.current.replace("audio", t.audio); }
+    if (pub.current) { pub.current.replace("video", t.video).catch(()=>toast.error("Video source could not switch")); pub.current.replace("audio", t.audio).catch(()=>toast.error("Audio source could not switch")); }
   }, []);
+  const onDeviceTracks = useCallback(t=>{setRawTracks(t);if(!production)onTracks(t);},[production,onTracks]);
+  const toggleProduction = () => {if(session||busy)return;const enabled=!production;setProduction(enabled);onTracks(enabled?{video:null,audio:null}:rawTracks);};
 
   const startPublishing = async () => {
     if (mode !== "device") return;
@@ -78,6 +83,7 @@ export default function LiveStudio() {
   const run = async (key, fn) => { setBusy(key); try { await fn(); } catch (e) { toast.error(e?.response ? errorText(e) : e.message); } finally { setBusy(""); refresh(); } };
 
   const startTest = () => run("test", async () => {
+    if (mode === "device" && !tracksRef.current.audio && !tracksRef.current.video) throw new Error("Enable your device or start the production mixer first.");
     await api.post("/broadcast/sessions", { title: form.title || "Private test", kind: form.kind, test: true });
     await startPublishing();
     toast.success("Private test started. Only you can see the preview.");
@@ -91,6 +97,7 @@ export default function LiveStudio() {
 
   const goLive = () => run("live", async () => {
     if (!form.title.trim()) throw new Error("Give your broadcast a title.");
+    if (mode === "device" && !tracksRef.current.audio && !tracksRef.current.video) throw new Error("Enable your device or start the production mixer first.");
     if (session?.visibility === "test") { await stopPublishing(); await api.post(`/broadcast/sessions/${session.id}/stop`); }
     const { data: s } = await api.post("/broadcast/sessions", { ...form, test: false, destination_ids: selected }, { headers: { "Idempotency-Key": `studio-${Date.now()}` } });
     await startPublishing();
@@ -140,14 +147,14 @@ export default function LiveStudio() {
             <h2 id="src-h" className="font-display text-xl mb-4">Devices & Sources</h2>
             <div role="tablist" className="mb-5 grid grid-cols-2 gap-2">
               {[["device", "This device", Laptop, "Camera and microphone in this browser"], ["encoder", "External encoder", MonitorUp, "OBS, vMix, Streamlabs, Wirecast, hardware"]].map(([k, l, I, d]) => (
-                <button key={k} role="tab" aria-selected={mode === k} onClick={() => setMode(k)} disabled={!!session} data-testid={`mode-${k}`}
+                <button key={k} role="tab" aria-selected={mode === k} onClick={() => {if(k!==mode){setProduction(false);setRawTracks({video:null,audio:null});onTracks({video:null,audio:null});setMode(k);}}} disabled={!!session||!!busy} data-testid={`mode-${k}`}
                   className={`text-left rounded-xl p-3 border transition disabled:opacity-60 ${mode === k ? "border-[#FFB000]/60 bg-[#FFB000]/10" : "border-white/10 hover:border-white/25"}`}>
                   <div className="flex items-center gap-2 text-sm font-medium"><I className="w-4 h-4" /> {l}</div>
                   <div className="text-xs text-gray-400 mt-1">{d}</div>
                 </button>
               ))}
             </div>
-            {mode === "device" ? <DevicesPanel onTracks={onTracks} live={live} /> : <EncoderPanel live={live} />}
+            {mode === "device" ? <><DevicesPanel onTracks={onDeviceTracks} live={live} /><div className="mt-4"><button type="button" className="rounded-full border border-white/15 px-4 py-2 text-sm disabled:opacity-40" disabled={!!session||!!busy} onClick={toggleProduction}>{production?"Return to direct device mode":"Enable professional production mode"}</button>{production&&<ProductionPanel raw={rawTracks} onTracks={onTracks}/>}</div></> : <EncoderPanel live={live} />}
           </div>
           <TestSetup mode={mode} videoTrack={tracks.video} audioTrack={tracks.audio} testing={!!session}
             stats={mode === "device" ? stats : feed.ready ? { kbps: feed.bitrate_kbps, lossPct: 0 } : null} />
