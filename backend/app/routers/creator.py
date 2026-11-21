@@ -208,6 +208,8 @@ async def upload(body: ContentCreate, user=Depends(get_user)):
 @router.delete("/content/{content_id}")
 async def delete(content_id: str, user=Depends(get_user)):
     ch = await _channel_for(user)
+    if await db.content.find_one({"id":content_id,"channel_id":ch["id"],"editorial_id":{"$exists":True}},{"id":1}):
+        raise HTTPException(409,"Suspend this title in the editorial workspace to retain its history")
     res = await db.content.delete_one({"id": content_id, "channel_id": ch["id"]})
     if not res.deleted_count:
         raise HTTPException(404, "Title not found on your channel")

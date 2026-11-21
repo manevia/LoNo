@@ -87,6 +87,7 @@ async def _collect(user_id: str) -> dict:
         "channel_content": content,
         "channel_memberships": await db.channel_members.find({"user_id":user_id},no_id).to_list(1000),
         "channel_work_authored": await db.channel_work.find({"author_id":user_id},no_id).to_list(1000),
+        "editorial_drafts_authored": await db.editorial_drafts.find({"author_id":user_id},no_id).to_list(1000),
         "stations": await db.stations.find({"owner_id": user_id}, no_id).to_list(2),
         "courses_created": await db.courses.find({"owner_id": user_id}, no_id).to_list(1000),
     }
@@ -116,9 +117,16 @@ async def delete_account(body: DeleteIn, user=Depends(get_user)):
         await db.content.delete_many({"channel_id": channel["id"]})
         await db.channel_members.delete_many({"channel_id":channel["id"]})
         await db.channel_work.delete_many({"channel_id":channel["id"]})
+        await db.editorial_drafts.delete_many({"channel_id":channel["id"]})
+        await db.files.update_many({"channel_id":channel["id"],"editorial_id":{"$exists":True}},{"$set":{"is_deleted":True}})
         await db.channels.delete_one({"id": channel["id"]})
     await db.channel_members.delete_many({"user_id":uid_})
     await db.channel_work.delete_many({"author_id":uid_})
+    authored=await db.editorial_drafts.find({"author_id":uid_},{"id":1}).to_list(1000)
+    if authored:
+        ids=[d["id"] for d in authored]
+        await db.content.delete_many({"editorial_id":{"$in":ids}})
+        await db.editorial_drafts.delete_many({"author_id":uid_})
     await db.stations.delete_many({"owner_id": uid_})
     async for c in db.courses.find({"owner_id": uid_}, {"id": 1}):
         await db.enrollments.delete_many({"course_id": c["id"]})

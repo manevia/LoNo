@@ -1,0 +1,10 @@
+import { useCallback,useEffect,useState } from "react";
+import { api,errorText } from "@/lib/api";
+import { toast } from "sonner";
+export default function EditorialModeration(){
+  const [rows,setRows]=useState([]),[notes,setNotes]=useState({}),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const load=useCallback(async()=>{try{setRows((await api.get("/admin/editorial")).data);setError("");}catch(e){setError(errorText(e));}},[]);
+  useEffect(()=>{load();const t=setInterval(load,15000);return()=>clearInterval(t);},[load]);
+  const act=async d=>{setBusy(true);try{await api.post(`/admin/editorial/${d.id}/${d.moderation_hold?"release-hold":"suspend"}`,{action:"suspend",revision:d.revision,reason:notes[d.id]});toast.success("Moderation decision saved");await load();}catch(e){toast.error(errorText(e));}finally{setBusy(false);}};
+  return <section className="space-y-4"><h2 className="font-display text-2xl">Editorial moderation</h2><p className="text-sm text-gray-400">Suspend a release created through the editorial workflow, or release the hold for corrections. Legacy uploads and live station content are unaffected.</p>{error&&<p role="alert" className="text-red-300">{error}</p>}{!rows.length?<p className="text-gray-400">No published editorial releases or held titles.</p>:rows.map(d=><article key={d.id} className="rounded-xl bg-[#121212] border border-white/10 p-4 space-y-2"><h3 className="font-semibold">{d.metadata.title}</h3><p className="text-sm text-gray-400">{d.status.replaceAll("_"," ")}{d.moderation_hold?" · moderation hold":""}</p><label className="block">Moderation reason<textarea className="block w-full bg-white/5 rounded border border-white/10 p-2" maxLength={500} value={notes[d.id]||""} onChange={e=>setNotes({...notes,[d.id]:e.target.value})}/></label><button className="rounded-full border border-white/15 px-4 py-2 text-sm disabled:opacity-40" disabled={busy||(notes[d.id]||"").trim().length<3||d.status==="unpublishing"} onClick={()=>act(d)}>{d.moderation_hold?"Release hold for corrections":"Suspend release"}</button></article>)}</section>;
+}

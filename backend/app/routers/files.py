@@ -106,6 +106,15 @@ async def download(path: str, request: Request, exp: int | None = None, sig: str
     rec = await db.files.find_one({"storage_path": path, "is_deleted": False, "pending": {"$ne": True}})
     if not rec:
         raise HTTPException(404, "File not found")
+    if rec.get("editorial_id"):
+        from ..broadcast.secrets_box import verify
+        import time
+        public=await db.content.find_one({"id":rec["editorial_id"],"editorial_id":rec["editorial_id"],"$or":[{"stream_url":f"/api/files/{path}"},{"thumbnail_url":f"/api/files/{path}"}]},{"id":1})
+        if not public and not (exp and sig and exp>time.time() and verify(path,sig,str(exp))):
+            raise HTTPException(403,"Editorial media is private")
+        response=await storage.serve(path,rec["content_type"],request,ttl=300)
+        response.headers["Cache-Control"]="private, no-store"
+        return response
     if rec.get("protected"):
         raise HTTPException(403, "This media is only available with a pass, from My passes.")
     if path.startswith("recordings/"):

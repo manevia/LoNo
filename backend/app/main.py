@@ -15,7 +15,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import client, ensure_indexes
-from .routers import account, admin, ai, auth, broadcast, campaigns, creator_api, rooms, content, creator, creator_courses, files, governance, guide, learn, payments, stations, teams, wallet, watch
+from .routers import account, admin, ai, auth, broadcast, campaigns, creator_api, rooms, content, creator, creator_courses, editorial, files, governance, guide, learn, payments, stations, teams, wallet, watch
 from .admin_setup import bootstrap_admins
 from .seed import seed_catalogue, seed_courses
 from .util import now_iso
@@ -112,6 +112,7 @@ async def lifespan(app: FastAPI):
                 pass
     tasks.append(asyncio.create_task(repair_loop()))
     tasks.append(asyncio.create_task(stations.monitor_stations(stop)))
+    tasks.append(asyncio.create_task(editorial.publication_loop(stop)))
     if config.MEDIA_ENABLED:
         from .broadcast import media
         from .broadcast.relays import manager
@@ -140,9 +141,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LoNo API", version=VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
 api = APIRouter(prefix="/api")
-for r in (auth, account, admin, broadcast, rooms, guide, content, watch, creator, creator_courses, wallet, governance, ai, payments, files, learn, stations, teams):
+for r in (auth, account, admin, broadcast, rooms, guide, content, watch, creator, creator_courses, editorial, wallet, governance, ai, payments, files, learn, stations, teams):
     api.include_router(r.router)
 api.include_router(creator.review_router)
+api.include_router(editorial.moderation)
 
 
 @api.get("/")
