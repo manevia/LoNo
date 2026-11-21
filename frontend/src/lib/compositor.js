@@ -40,7 +40,7 @@ export class Compositor {
 
   resume() { return this.ctx.resume(); }
 
-  setSource(id, { stream, name, location, showLocation, muted, audioOnly }) {
+  setSource(id, { stream, name, location, showLocation, muted, audioOnly, gain = 1 }) {
     let s = this.sources.get(id);
     if (!s) {
       const video = document.createElement("video");
@@ -57,7 +57,7 @@ export class Compositor {
       for (const other of this.sources.values()) if (other !== s) { gain.connect(other.returnBus); other.gain.connect(s.returnBus); }
       if (this.clip?.node) this.clip.node.connect(s.returnBus);
     }
-    Object.assign(s, { name, location, showLocation, muted, audioOnly });
+    Object.assign(s, { name, location, showLocation, muted, audioOnly, volume: gain });
     if (stream && stream !== s.stream) {
       s.stream = stream; s.video.srcObject = stream; s.video.play().catch(() => {});
       s.node?.disconnect(); s.node = null;
@@ -76,7 +76,9 @@ export class Compositor {
   removeSource(id) {
     const s = this.sources.get(id);
     if (!s) return;
-    s.node?.disconnect(); s.gain.disconnect(); s.returnBus.disconnect();
+    for (const other of this.sources.values()) if(other!==s){try{other.gain.disconnect(s.returnBus);}catch{/* already disconnected */}}
+    if(this.clip?.node){try{this.clip.node.disconnect(s.returnBus);}catch{/* already disconnected */}}
+    s.node?.disconnect(); s.gain.disconnect(); s.returnBus.disconnect();s.returnDest.stream.getTracks().forEach(t=>t.stop());
     s.video.srcObject = null;
     this.sources.delete(id);
   }
@@ -120,7 +122,7 @@ export class Compositor {
   _applyGains() {
     const air = this._onAir();
     for (const s of this.sources.values()) {
-      s.gain.gain.setTargetAtTime(air.has(s.id) && !s.muted ? 1 : 0, this.ctx.currentTime, 0.05);  // short fade, no clicks
+      s.gain.gain.setTargetAtTime(air.has(s.id) && !s.muted ? s.volume ?? 1 : 0, this.ctx.currentTime, 0.05);  // short fade, no clicks
     }
   }
 
@@ -169,10 +171,15 @@ export class Compositor {
     if (scene.scene === "single") {
       this._drawVideo(ctx, src(0), 0, 0, W, H); this._lowerThird(ctx, src(0), 48, H - 140);
     } else if (scene.scene === "split") {
+      if (scene.sources.length > 2) {
+        const gap=12,w=(W-gap*3)/2,h=(H-gap*3)/2;
+        scene.sources.forEach((_,i)=>{const x=gap+(i%2)*(w+gap),y=gap+Math.floor(i/2)*(h+gap);this._drawVideo(ctx,src(i),x,y,w,h);this._lowerThird(ctx,src(i),x+12,y+h-100);});
+      } else {
       const gap = 12, w = (W - gap * 3) / 2, h = w * 9 / 16, y = (H - h) / 2;
       ctx.fillStyle = "#0b0b0b"; ctx.fillRect(0, 0, W, H);
       this._drawVideo(ctx, src(0), gap, y, w, h); this._drawVideo(ctx, src(1), gap * 2 + w, y, w, h);
       this._lowerThird(ctx, src(0), gap + 20, y + h - 110); this._lowerThird(ctx, src(1), gap * 2 + w + 20, y + h - 110);
+      }
     } else if (scene.scene === "clip" && isProgram && this.clip?.video.readyState >= 2) {
       const v = this.clip.video; ctx.drawImage(v, 0, 0, W, H);
     } else if (scene.scene === "clip") {
@@ -232,6 +239,9 @@ export class Compositor {
 
   destroy() {
     this.running = false; clearTimeout(this._timer);
+    this.videoStream.getTracks().forEach(t=>t.stop());
+    this.programDest.stream.getTracks().forEach(t=>t.stop());
+    this.clip?.video.pause();this.clip?.node.disconnect();
     for (const id of [...this.sources.keys()]) this.removeSource(id);
     this.ctx.close().catch(() => {});
   }

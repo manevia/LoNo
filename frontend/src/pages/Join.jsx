@@ -27,23 +27,27 @@ export default function Join() {
   const returnEl = useRef(null);
   const tracksRef = useRef(tracks); tracksRef.current = tracks;
   const retryTimer = useRef(null);
+  const returnTimer = useRef(null);
+  const active = useRef(false);
   const audioOnlyRef = useRef(false); audioOnlyRef.current = audioOnly;
 
   const load = useCallback(async () => {
     try { const { data } = await api.get(`/join/${token}`); setInfo(data); setError(null); }
-    catch (e) { setError(errorText(e, "This invitation isn't valid.")); }
+    catch (e) { setError(errorText(e, "This invitation isn't valid.")); if([404,410].includes(e.response?.status)){active.current=false;clearTimeout(retryTimer.current);clearTimeout(returnTimer.current);pub.current?.stop();ret.current?.stop();} }
   }, [token]);
   useEffect(() => { load(); const t = setInterval(load, 1500); return () => clearInterval(t); }, [load]);
 
   const publish = useCallback(async () => {
+    if(!active.current)return;
     clearTimeout(retryTimer.current);
     setConn((c) => (c === "connected" || c === "reconnecting" ? "reconnecting" : "connecting"));
     try {
       await pub.current?.stop();
       const t = tracksRef.current;
-      pub.current = await publishWhip({
+      const publisher = await publishWhip({
         endpoint: `/join/${token}/whip`, video: audioOnlyRef.current ? null : t.video, audio: t.audio,
         onState: (s) => {
+          if(!active.current)return;
           if (s === "connected") setConn("connected");
           if (s === "failed" || s === "disconnected") {   // weak coverage: retry until it's back
             setConn("reconnecting");
@@ -52,7 +56,9 @@ export default function Join() {
           }
         },
       });
+      if(!active.current){await publisher.stop();return;}pub.current=publisher;
     } catch {
+      if(!active.current)return;
       setConn("reconnecting");
       retryTimer.current = setTimeout(() => publish(), 3000);
     }
@@ -60,23 +66,29 @@ export default function Join() {
 
   // Private audio return: try until the producer's Control Room provides it.
   const listen = useCallback(async () => {
+    if(!active.current)return;
+    clearTimeout(returnTimer.current);
     try {
       ret.current?.stop();
-      ret.current = await playWhep({ endpoint: `/join/${token}/return/whep`, audioOnly: true,
-        onState: (s) => { if (s === "failed" || s === "disconnected") { setReturnOn(false); setTimeout(listen, 3000); } } });
+      const connection = await playWhep({ endpoint: `/join/${token}/return/whep`, audioOnly: true,
+        onState: (s) => { if (active.current&&(s === "failed" || s === "disconnected")) { setReturnOn(false);clearTimeout(returnTimer.current);returnTimer.current=setTimeout(listen, 3000); } } });
+      if(!active.current){connection.stop();return;}ret.current=connection;
       if (returnEl.current) { returnEl.current.srcObject = ret.current.stream; returnEl.current.play().catch(() => {}); }
       setReturnOn(true);
-    } catch { setReturnOn(false); setTimeout(listen, 2000); }   // the producer may not be sending it yet
+    } catch { if(active.current){setReturnOn(false);returnTimer.current=setTimeout(listen, 2000);} }   // the producer may not be sending it yet
   }, [token]);
 
   const join = async () => {
     await api.post(`/join/${token}/ready`);
+    active.current=true;
     setJoined(true);
     await publish();
     listen();
   };
   const leave = async () => {
+    active.current=false;
     clearTimeout(retryTimer.current);
+    clearTimeout(returnTimer.current);
     await pub.current?.stop(); ret.current?.stop(); pub.current = null;
     await api.post(`/join/${token}/leave`).catch(() => {});
     setJoined(false); setConn("idle");
@@ -86,7 +98,7 @@ export default function Join() {
     await api.post(`/join/${token}/audio-only`, { on }).catch(() => {});
     if (pub.current) await pub.current.replace("video", on ? null : tracksRef.current.video);
   };
-  useEffect(() => () => { clearTimeout(retryTimer.current); pub.current?.stop(); ret.current?.stop(); }, []);
+  useEffect(() => () => { active.current=false;clearTimeout(retryTimer.current);clearTimeout(returnTimer.current);pub.current?.stop();ret.current?.stop(); }, []);
 
   const onTracks = useCallback((t) => {
     setTracks(t);
@@ -104,7 +116,7 @@ export default function Join() {
       <div data-testid="onair-indicator" data-on-air={onAir ? "1" : "0"}
         className={`sticky top-0 z-10 px-4 py-3 text-center font-display text-xl tracking-wide ${onAir ? "bg-[#FF3B30] text-white" : c.state === "cued" ? "bg-[#FFB000] text-black" : "bg-white/5 text-gray-300"}`}
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }} role="status" aria-live="assertive">
-        {onAir ? "● ON AIR" : c.state === "cued" ? `CUED: ${c.cue || "Stand by"}` : joined ? "Waiting: you're not on air" : "Not connected"}
+        {onAir ? (info.live?"● ON AIR":"Selected in programme (not public)") : c.state === "cued" ? `CUED: ${c.cue || "Stand by"}` : joined ? (c.admitted===false?"Backstage: awaiting host admission":"Admitted: waiting for TAKE") : "Not connected"}
       </div>
 
       <div className="max-w-xl mx-auto px-4 pt-6 pb-24">

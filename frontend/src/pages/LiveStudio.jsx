@@ -133,6 +133,7 @@ export default function LiveStudio() {
   return (
     <div data-testid="live-studio" className="max-w-[1500px] mx-auto px-4 md:px-8 pt-8 pb-32">
       <Link to="/studio" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white"><ArrowLeft className="w-4 h-4" /> Studio</Link>
+      <Link to="/studio/control" className="ml-4 text-sm text-[#FF8A82]">Remote guest & multi-presenter studio</Link>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight mr-auto">Live Studio</h1>
         <span data-testid="studio-status" className={`text-sm px-3 py-1 rounded-full border ${live ? "text-white bg-[#FF3B30] border-[#FF3B30]" : testing ? "text-[#FFB000] border-[#FFB000]/40" : "text-gray-400 border-white/15"}`}>
