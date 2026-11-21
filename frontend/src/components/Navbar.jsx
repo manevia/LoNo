@@ -11,6 +11,7 @@ const NAV = [
   { to: "/", label: "Home", icon: Home },
   { to: "/browse/movie", label: "Movies", icon: Compass },
   { to: "/browse/series", label: "Series", icon: Video },
+  { to: "/browse/music", label: "Music", icon: Radio },
   { to: "/browse/podcast", label: "Podcasts", icon: Radio },
   { to: "/live", label: "Live", icon: Radio },
   { to: "/learn", label: "Learn", icon: GraduationCap },

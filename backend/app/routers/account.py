@@ -73,6 +73,7 @@ async def _collect(user_id: str) -> dict:
         "exported_at": now_iso(),
         "about": "Everything LoNo stores about your account. $LONO is a simulated in-app token with no cash value.",
         "account": u,
+        "audio_playlists": await db.audio_playlists.find({"user_id":user_id},no_id).to_list(100),
         "transactions": await db.transactions.find({"user_id": user_id}, no_id).sort("at", 1).to_list(100000),
         "stakes": await db.stakes.find({"user_id": user_id}, no_id).to_list(1000),
         "watch_sessions": await db.watch_sessions.find({"user_id": user_id}, no_id).to_list(100000),
@@ -121,6 +122,7 @@ async def delete_account(body: DeleteIn, user=Depends(get_user)):
         await db.files.update_many({"channel_id":channel["id"],"editorial_id":{"$exists":True}},{"$set":{"is_deleted":True}})
         await db.channels.delete_one({"id": channel["id"]})
     await db.channel_members.delete_many({"user_id":uid_})
+    await db.audio_playlists.delete_many({"user_id":uid_})
     await db.channel_work.delete_many({"author_id":uid_})
     authored=await db.editorial_drafts.find({"author_id":uid_},{"id":1}).to_list(1000)
     if authored:

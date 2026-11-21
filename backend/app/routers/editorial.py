@@ -51,6 +51,27 @@ class EpisodeIn(BaseModel):
     runtime_minutes:int|None=Field(default=None,ge=1,le=1440)
 
 
+class AudioIn(BaseModel):
+    artist:str=Field(min_length=2,max_length=140)
+    artist_bio:str=Field(default="",max_length=2000)
+    release_type:Literal["single","album","podcast"]="single"
+    collection_title:str=Field(default="",max_length=140)
+    collection_description:str=Field(default="",max_length=2000)
+    season:int=Field(default=1,ge=1,le=999)
+    track:int=Field(default=1,ge=1,le=9999)
+    genre:str=Field(default="",max_length=60)
+    language:str=Field(default="",max_length=80)
+    explicit:bool=False
+    runtime_minutes:int|None=Field(default=None,ge=1,le=1440)
+
+
+def audio_identity(channel_id,a):
+    norm=lambda s:" ".join(s.split()).casefold()
+    artist=hashlib.sha256(f"{channel_id}:artist:{norm(a['artist'])}".encode()).hexdigest()
+    group=hashlib.sha256(f"{artist}:{a['release_type']}:{norm(a['collection_title'])}".encode()).hexdigest() if a['release_type']!='single' else None
+    return artist,group,f"{group}:{a['season']}:{a['track']}" if group else None
+
+
 def episode_identity(channel_id,episode):
     title=" ".join(episode["series_title"].split()).casefold()
     key=hashlib.sha256(f"{channel_id}:{title}".encode()).hexdigest()
@@ -66,6 +87,7 @@ class DraftIn(BaseModel):
     thumbnail_id:str|None=None
     film:FilmIn|None=None
     episode:EpisodeIn|None=None
+    audio:AudioIn|None=None
     revision:int=Field(default=0,ge=0)
 
 
@@ -120,6 +142,14 @@ async def _metadata(d,body):
         if body.kind!="series":raise HTTPException(422,"Episode metadata is only for series")
         data["episode"]["series_title"]=" ".join(body.episode.series_title.split())
         if len(data["episode"]["series_title"])<2:raise HTTPException(422,"Enter a series title")
+    if body.audio:
+        if body.kind not in ("music","podcast"):raise HTTPException(422,"Audio metadata is only for music and podcasts")
+        a=data["audio"]
+        for key in ("artist","collection_title","genre","language"):a[key]=" ".join(a[key].split())
+        if len(a["artist"])<2:raise HTTPException(422,"Enter an artist or host name")
+        if (body.kind=="podcast")!=(a["release_type"]=="podcast"):raise HTTPException(422,"Choose a matching audio release type")
+        if a["release_type"]!="single" and len(a["collection_title"])<2:raise HTTPException(422,"Enter an album or podcast show title")
+        if a["release_type"]!="podcast":a["season"]=1
     return data
 
 
@@ -201,6 +231,11 @@ async def decide(channel_id:str,draft_id:str,body:Decision,user=Depends(get_user
         if not ep:raise HTTPException(422,"Save the series, season and episode details first")
         _,slot=episode_identity(channel_id,ep)
         if await db.content.find_one({"series_slot":slot,"id":{"$ne":draft_id}},{"id":1}):raise HTTPException(409,"That episode number is already published")
+    if body.action in ("submit","schedule") and d["metadata"]["kind"] in ("music","podcast"):
+        a=d["metadata"].get("audio")
+        if not a:raise HTTPException(422,"Save the audio release details first")
+        _,_,slot=audio_identity(channel_id,a)
+        if slot and await db.content.find_one({"audio_slot":slot,"id":{"$ne":draft_id}},{"id":1}):raise HTTPException(409,"That track or episode number is already published")
     if body.action=="schedule":
         when=body.publish_at or now()
         if when.tzinfo is None:raise HTTPException(422,"Include the time zone")
@@ -274,9 +309,14 @@ async def process_release(d):
         ep=dict(m["episode"]);key,slot=episode_identity(d["channel_id"],ep)
         content["series"]={**ep,"key":key};content["series_slot"]=slot
         if ep.get("runtime_minutes"):content["duration_sec"]=ep["runtime_minutes"]*60
+    if m["kind"] in ("music","podcast") and m.get("audio"):
+        a=dict(m["audio"]);artist,group,slot=audio_identity(d["channel_id"],a)
+        content["audio"]={**a,"artist_key":artist,"collection_key":group}
+        if slot:content["audio_slot"]=slot
+        if a.get("runtime_minutes"):content["duration_sec"]=a["runtime_minutes"]*60
     try:await db.content.update_one({"id":d["id"],"editorial_id":d["id"]},{"$setOnInsert":content},upsert=True)
     except DuplicateKeyError:
-        await _change(d,{"status":"changes_requested"},"publication_blocked","system","Episode number already published or publication ID conflict")
+        await _change(d,{"status":"changes_requested"},"publication_blocked","system","Track or episode number already published or publication ID conflict")
         return
     await _change(d,{"status":"published","published_at":now_iso()},"published","system")
 

@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import ContentCard from "@/components/ContentCard";
 import FilmLibrary from "@/components/FilmLibrary";
 import SeriesLibrary from "@/components/SeriesLibrary";
+import AudioLibrary from "@/components/AudioLibrary";
 import { Loader2 } from "lucide-react";
 
 const LABELS = {
@@ -17,7 +18,7 @@ export default function Browse() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if(kind==="movie"||kind==="series")return;
+    if(["movie","series","music","podcast"].includes(kind))return;
     (async () => {
       setLoading(true);
       try {
@@ -29,6 +30,7 @@ export default function Browse() {
 
   if(kind==="movie")return <FilmLibrary/>;
   if(kind==="series")return <SeriesLibrary/>;
+  if(kind==="music"||kind==="podcast")return <AudioLibrary key={kind} kind={kind}/>;
 
   return (
     <div data-testid="browse-page" className="max-w-[1600px] mx-auto px-4 md:px-8 pt-8 pb-24">

@@ -7,6 +7,7 @@ from typing import Literal
 
 from ..db import db
 from ..security import get_user, get_user_optional
+from .audio import CARD as AUDIO_CARD, AVAILABLE as AUDIO_AVAILABLE
 
 router = APIRouter(tags=["content"])
 P = {"_id": 0, "subtitles_vtt": 0, "transcript": 0}
@@ -118,6 +119,10 @@ async def get_content(content_id: str, user=Depends(get_user_optional)):
         s=c["series"];q={"kind":"series","series.key":s["key"],"gated":{"$ne":True}}
         c["next_episode"]=await db.content.find_one({**q,"$or":[{"series.season":{"$gt":s["season"]}},{"series.season":s["season"],"series.episode":{"$gt":s["episode"]}}]},EPISODE_CARD,sort=[("series.season",1),("series.episode",1)])
         c["previous_episode"]=await db.content.find_one({**q,"$or":[{"series.season":{"$lt":s["season"]}},{"series.season":s["season"],"series.episode":{"$lt":s["episode"]}}]},EPISODE_CARD,sort=[("series.season",-1),("series.episode",-1)])
+    if c.get("kind") in ("music","podcast") and (c.get("audio") or {}).get("collection_key") and not c.get("gated"):
+        a=c["audio"];q={**AUDIO_AVAILABLE,"audio.collection_key":a["collection_key"]}
+        c["next_audio"]=await db.content.find_one({**q,"$or":[{"audio.season":{"$gt":a["season"]}},{"audio.season":a["season"],"audio.track":{"$gt":a["track"]}}]},AUDIO_CARD,sort=[("audio.season",1),("audio.track",1)])
+        c["previous_audio"]=await db.content.find_one({**q,"$or":[{"audio.season":{"$lt":a["season"]}},{"audio.season":a["season"],"audio.track":{"$lt":a["track"]}}]},AUDIO_CARD,sort=[("audio.season",-1),("audio.track",-1)])
     c["has_subtitles"] = bool(await db.content.count_documents({"id": content_id, "subtitles_vtt": {"$exists": True}}))
     c["channel"] = await db.channels.find_one({"id": c.get("channel_id")}, {"_id": 0, "creator_profile":0,"verification_reason":0,"creator_revision":0,"verification_submitted_at":0,"verification_reviewed_at":0}) if c.get("channel_id") else None
     c["similar"] = await db.content.find(
