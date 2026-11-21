@@ -8,6 +8,7 @@ import { Loader2, Share2, Plus, Check, ThumbsUp, Sparkles, Coins, Captions, Grad
 import { toast } from "sonner";
 import ContentCard from "@/components/ContentCard";
 import FilmDetails from "@/components/FilmDetails";
+import SeriesEpisodes from "@/components/SeriesEpisodes";
 import MediaPlayer from "@/components/MediaPlayer";
 import TvVodPlayer from "@/components/tv/TvVodPlayer";
 import { usePrefs } from "@/lib/device";
@@ -22,6 +23,7 @@ export default function Watch() {
   const { tv } = usePrefs();
   const location = useLocation();
   const [item, setItem] = useState(null);
+  const [autoNext,setAutoNext]=useState(false);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState("");
   const [summarizing, setSummarizing] = useState(false);
@@ -35,6 +37,7 @@ export default function Watch() {
 
   useEffect(() => {
     let live = true;
+    setAutoNext(!!location.state?.autoNext);
     setItem(null); setError(null); setSummary(""); setSubtitleUrl(null);
     api.get(`/content/${id}`).then(({ data }) => {
       if (!live) return;
@@ -45,7 +48,7 @@ export default function Watch() {
       if (data.ai_summary) setSummary(data.ai_summary);
     }).catch((e) => live && setError(errorText(e, "This title couldn't be loaded.")));
     return () => { live = false; };
-  }, [id]);
+  }, [id,location.state?.autoNext]);
 
   const needUser = () => {
     if (user) return false;
@@ -123,10 +126,11 @@ export default function Watch() {
   );
   const isAudio = ["music", "podcast", "live_radio"].includes(item.kind);
   const isLive = item.kind.startsWith("live");
-  const nextItem = item.similar?.find((s) => !s.kind.startsWith("live"));
+  const nextItem = item.series?.key ? item.next_episode : item.similar?.find((s) => !s.kind.startsWith("live"));
   const prevId = location.state?.prevId;
-  const goNext = nextItem ? () => nav(`/watch/${nextItem.id}`, { state: { prevId: item.id } }) : undefined;
-  const goPrev = prevId ? () => nav(-1) : undefined;
+  const goNext = nextItem ? () => nav(`/watch/${nextItem.id}`, { state: { prevId: item.id, autoNext, autoplay: !!item.series?.key } }) : undefined;
+  const goPrev = item.previous_episode ? () => nav(`/watch/${item.previous_episode.id}`,{state:{autoNext}}) : prevId ? () => nav(-1) : undefined;
+  const mediaProps={...watch.mediaProps,onEnded:e=>{watch.mediaProps.onEnded?.(e);if(item.series?.key&&autoNext&&goNext)goNext();}};
   const resumeAt = viewer.position_sec || 0;
   const onLoadedMetadata = (e) => {
     const m = e.currentTarget;
@@ -143,8 +147,8 @@ export default function Watch() {
         <div className="lg:col-span-8">
           {tv && !isLive ? (
             <TvVodPlayer item={item} audio={isAudio} src={resolveMedia(item.stream_url)} poster={resolveMedia(item.thumbnail_url)}
-              artist={item.channel?.name} subtitleUrl={subtitleUrl} mediaProps={watch.mediaProps} onLoadedMetadata={onLoadedMetadata}
-              onNext={goNext} nextLabel={nextItem ? `Next: ${nextItem.title}` : undefined} onPrev={goPrev} />
+              artist={item.channel?.name} subtitleUrl={subtitleUrl} mediaProps={mediaProps} onLoadedMetadata={onLoadedMetadata}
+              onNext={goNext} nextLabel={nextItem ? `Next: ${nextItem.title}` : undefined} onPrev={goPrev} autoPlay={!!location.state?.autoplay} />
           ) : isAudio ? (
             <div className="relative rounded-2xl overflow-hidden bg-[#121212] ring-1 ring-white/10 aspect-video">
               <img loading="lazy" decoding="async" src={resolveMedia(item.thumbnail_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
@@ -159,7 +163,7 @@ export default function Watch() {
           ) : (
             <MediaPlayer key={item.id} testId="video-player" src={resolveMedia(item.stream_url)} poster={resolveMedia(item.thumbnail_url)}
               live={isLive} title={item.title} artist={item.channel?.name} artwork={resolveMedia(item.thumbnail_url)}
-              subtitleUrl={subtitleUrl} mediaProps={watch.mediaProps} onLoadedMetadata={onLoadedMetadata} />
+              subtitleUrl={subtitleUrl} mediaProps={mediaProps} autoPlay={!!location.state?.autoplay} onLoadedMetadata={onLoadedMetadata} />
           )}
 
           <div className="mt-6 flex items-start justify-between gap-4 flex-wrap">
@@ -195,6 +199,7 @@ export default function Watch() {
 
           <p className="mt-6 text-gray-300 leading-relaxed max-w-3xl">{item.description}</p>
           {item.kind==="movie"&&<FilmDetails key={item.id} item={item}/>}
+          {item.series?.key&&<SeriesEpisodes key={item.id} item={item} autoNext={autoNext} setAutoNext={setAutoNext}/>}
 
           {item.course_id && (
             <Link to={`/learn/${item.course_id}`} data-testid="course-link"

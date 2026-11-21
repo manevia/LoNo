@@ -15,6 +15,8 @@ async def ensure_indexes():
     await db.users.create_index("id", unique=True)
     await db.users.create_index("email", unique=True)
     await db.content.create_index("id", unique=True)
+    await db.content.create_index("series_slot", unique=True, sparse=True)
+    await db.content.create_index([("series.key",1),("series.season",1),("series.episode",1)])
     await db.content.create_index([("kind", 1), ("category", 1)])
     await db.channels.create_index("id", unique=True)
     await db.channel_members.create_index([("channel_id",1),("user_id",1)], unique=True)

@@ -10,6 +10,30 @@ from ..security import get_user, get_user_optional
 
 router = APIRouter(tags=["content"])
 P = {"_id": 0, "subtitles_vtt": 0, "transcript": 0}
+EPISODE_CARD={"_id":0,"id":1,"title":1,"category":1,"thumbnail_url":1,"description":1,"duration_sec":1,"kind":1,"series":1}
+
+
+@router.get("/series")
+async def series_catalogue(offset:int=0):
+    # Legacy standalone series remain visible; structured episodes collapse into one card per channel-owned series.
+    rows=await db.content.aggregate([
+        {"$match":{"kind":"series"}},
+        {"$sort":{"series.season":1,"series.episode":1,"id":1}},
+        {"$group":{"_id":{"$ifNull":["$series.key","$id"]},"first":{"$first":"$$ROOT"},"episodes":{"$sum":1},"seasons":{"$addToSet":"$series.season"},"updated":{"$max":"$created_at"}}},
+        {"$sort":{"updated":-1,"_id":1}},{"$skip":max(0,offset)},{"$limit":101},
+        {"$project":{"_id":0,"key":"$_id","id":"$first.id","title":{"$ifNull":["$first.series.series_title","$first.title"]},"category":"$first.category","thumbnail_url":"$first.thumbnail_url","kind":"$first.kind","series":"$first.series","episodes":1,"seasons":1}}
+    ]).to_list(101)
+    return {"items":rows[:100],"has_more":len(rows)>100}
+
+
+@router.get("/series/{key}")
+async def series_episodes(key:str,season:int|None=None,offset:int=0):
+    q={"kind":"series","series.key":key,"gated":{"$ne":True}}
+    seasons=sorted(await db.content.distinct("series.season",q))
+    if not seasons:raise HTTPException(404,"Series not found")
+    season=season if season is not None else seasons[0]
+    rows=await db.content.find({**q,"series.season":season},EPISODE_CARD).sort([("series.episode",1),("id",1)]).skip(max(0,offset)).limit(101).to_list(101)
+    return {"seasons":seasons,"season":season,"items":rows[:100],"has_more":len(rows)>100}
 
 
 @router.get("/films")
@@ -90,6 +114,10 @@ async def get_content(content_id: str, user=Depends(get_user_optional)):
         c.pop("stream_url", None); c.pop("media_prefix", None)
         offer = await db.campaigns.find_one({"replay_content_id": content_id, "status": {"$in": ["open", "paused", "closed"]}}, {"id": 1})
         c["offer_id"] = (offer or {}).get("id")
+    if c.get("series") and c["series"].get("key") and not c.get("gated"):
+        s=c["series"];q={"kind":"series","series.key":s["key"],"gated":{"$ne":True}}
+        c["next_episode"]=await db.content.find_one({**q,"$or":[{"series.season":{"$gt":s["season"]}},{"series.season":s["season"],"series.episode":{"$gt":s["episode"]}}]},EPISODE_CARD,sort=[("series.season",1),("series.episode",1)])
+        c["previous_episode"]=await db.content.find_one({**q,"$or":[{"series.season":{"$lt":s["season"]}},{"series.season":s["season"],"series.episode":{"$lt":s["episode"]}}]},EPISODE_CARD,sort=[("series.season",-1),("series.episode",-1)])
     c["has_subtitles"] = bool(await db.content.count_documents({"id": content_id, "subtitles_vtt": {"$exists": True}}))
     c["channel"] = await db.channels.find_one({"id": c.get("channel_id")}, {"_id": 0, "creator_profile":0,"verification_reason":0,"creator_revision":0,"verification_submitted_at":0,"verification_reviewed_at":0}) if c.get("channel_id") else None
     c["similar"] = await db.content.find(

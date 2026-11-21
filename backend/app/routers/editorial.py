@@ -1,5 +1,6 @@
 """Versioned private media drafts; only approved releases enter the public catalogue."""
 import asyncio
+import hashlib
 import logging
 import time
 from datetime import datetime, timezone, timedelta
@@ -41,6 +42,21 @@ class FilmIn(BaseModel):
     trailer_id:str|None=None
 
 
+class EpisodeIn(BaseModel):
+    series_title:str=Field(min_length=2,max_length=140)
+    series_description:str=Field(default="",max_length=2000)
+    season:int=Field(default=1,ge=1,le=999)
+    episode:int=Field(default=1,ge=1,le=9999)
+    season_title:str=Field(default="",max_length=100)
+    runtime_minutes:int|None=Field(default=None,ge=1,le=1440)
+
+
+def episode_identity(channel_id,episode):
+    title=" ".join(episode["series_title"].split()).casefold()
+    key=hashlib.sha256(f"{channel_id}:{title}".encode()).hexdigest()
+    return key,f'{key}:{episode["season"]}:{episode["episode"]}'
+
+
 class DraftIn(BaseModel):
     title:str=Field(min_length=2,max_length=140)
     description:str=Field(default="",max_length=4000)
@@ -49,6 +65,7 @@ class DraftIn(BaseModel):
     media_id:str|None=None
     thumbnail_id:str|None=None
     film:FilmIn|None=None
+    episode:EpisodeIn|None=None
     revision:int=Field(default=0,ge=0)
 
 
@@ -99,6 +116,10 @@ async def _metadata(d,body):
         if body.film.trailer_id:await _asset(d,body.film.trailer_id,"video/")
     elif body.kind=="movie":
         data["film"]=FilmIn().model_dump()
+    if body.episode:
+        if body.kind!="series":raise HTTPException(422,"Episode metadata is only for series")
+        data["episode"]["series_title"]=" ".join(body.episode.series_title.split())
+        if len(data["episode"]["series_title"])<2:raise HTTPException(422,"Enter a series title")
     return data
 
 
@@ -175,6 +196,11 @@ async def decide(channel_id:str,draft_id:str,body:Decision,user=Depends(get_user
     if d["status"] not in allowed[body.action]:raise HTTPException(409,"Invalid editorial transition")
     if body.action in ("changes_requested","suspend") and len(body.reason.strip())<3:raise HTTPException(422,"Enter a reason")
     if body.action=="submit" and not d["metadata"].get("media_id"):raise HTTPException(422,"Attach media before submission")
+    if body.action in ("submit","schedule") and d["metadata"]["kind"]=="series":
+        ep=d["metadata"].get("episode")
+        if not ep:raise HTTPException(422,"Save the series, season and episode details first")
+        _,slot=episode_identity(channel_id,ep)
+        if await db.content.find_one({"series_slot":slot,"id":{"$ne":draft_id}},{"id":1}):raise HTTPException(409,"That episode number is already published")
     if body.action=="schedule":
         when=body.publish_at or now()
         if when.tzinfo is None:raise HTTPException(422,"Include the time zone")
@@ -244,8 +270,14 @@ async def process_release(d):
         if trailer:content["trailer_url"]="/api/files/"+trailer["storage_path"]
         if film.get("release_year"):content["year"]=film["release_year"]
         if film.get("runtime_minutes"):content["duration_sec"]=film["runtime_minutes"]*60
+    if m["kind"]=="series" and m.get("episode"):
+        ep=dict(m["episode"]);key,slot=episode_identity(d["channel_id"],ep)
+        content["series"]={**ep,"key":key};content["series_slot"]=slot
+        if ep.get("runtime_minutes"):content["duration_sec"]=ep["runtime_minutes"]*60
     try:await db.content.update_one({"id":d["id"],"editorial_id":d["id"]},{"$setOnInsert":content},upsert=True)
-    except DuplicateKeyError:raise HTTPException(409,"Publication ID conflict")
+    except DuplicateKeyError:
+        await _change(d,{"status":"changes_requested"},"publication_blocked","system","Episode number already published or publication ID conflict")
+        return
     await _change(d,{"status":"published","published_at":now_iso()},"published","system")
 
 
