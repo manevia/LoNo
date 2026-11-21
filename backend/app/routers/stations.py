@@ -53,6 +53,18 @@ class StationIn(BaseModel):
         raise ValueError("Use an HTTPS image URL or upload an image")
 
 
+class PlaylistItem(BaseModel):
+    file_id: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=140)
+    duration: int = Field(ge=10, le=86400)
+    kind: Literal["programme", "jingle", "commercial"] = "programme"
+
+
+class PlaylistIn(BaseModel):
+    items: list[PlaylistItem] = Field(default_factory=list, max_length=50)
+    continuous: bool = False
+
+
 class ProgrammeIn(BaseModel):
     title: str = Field(min_length=1, max_length=140)
     description: str = Field(default="", max_length=1000)
@@ -62,6 +74,7 @@ class ProgrammeIn(BaseModel):
     file_id: str | None = Field(default=None, max_length=100)
     repeat: Literal["none", "daily", "weekly"] = "none"
     occurrences: int = Field(default=1, ge=1, le=52)
+    playlist: bool = False
 
 
 class AutomationIn(BaseModel):
@@ -86,16 +99,55 @@ async def _check_file(file_id, station):
     return f
 
 
+def playlist_source(s, items, anchor, clock, files, key, until=None):
+    """Choose the current timed item without restarting the lineup on viewer join."""
+    if not items or not anchor:
+        return None
+    base = datetime.fromisoformat(anchor)
+    stamp = datetime.fromisoformat(clock)
+    total = sum(item["duration"] for item in items)
+    elapsed = max(0, (stamp-base).total_seconds())
+    cycle = int(elapsed // total)
+    offset = elapsed % total
+    for index, item in enumerate(items):
+        if offset < item["duration"]:
+            start = stamp - timedelta(seconds=offset)
+            end = start + timedelta(seconds=item["duration"])
+            boundary = min(end, datetime.fromisoformat(until)) if until else end
+            f = files.get(item["file_id"])
+            if not eligible_file(f, s):
+                f = files.get(s.get("fallback_file_id"))
+                if not eligible_file(f, s):
+                    return None
+                title, kind = "Continuous programming", "fallback"
+            else:
+                title, kind = item["title"], item["kind"]
+            return {"mode": "playlist", "key": f"{key}:{cycle}:{index}", "title": title,
+                    "item_kind": kind, "url": "/api/files/" + f["storage_path"],
+                    "anchor": start.isoformat(), "until": boundary.isoformat()}
+        offset -= item["duration"]
+    return None
+
+
 def playout(s, active, live_url, current, next_program, files, clock):
     """A real public live session always overrides the time-based schedule."""
     if active and live_url:
         return {"mode": "live", "key": active["content_id"], "title": active["title"], "url": live_url}
     if not s.get("automation_enabled"):
         return None
+    if current and current.get("playlist_items"):
+        source = playlist_source(s, current["playlist_items"], current["start"], clock, files, current["id"], current["end"])
+        if source:
+            return source
     scheduled = current and current.get("format") == "prerecorded" and files.get(current.get("file_id"))
     fallback = files.get(s.get("fallback_file_id"))
     if eligible_file(scheduled, s):
         return {"mode": "scheduled", "key": current["id"], "title": current["title"], "url": "/api/files/" + scheduled["storage_path"], "anchor": current["start"], "until": current["end"]}
+    if s.get("playlist_continuous"):
+        source = playlist_source(s, s.get("playlist_items", []), s.get("playlist_anchor"), clock, files,
+                                 "continuous", current["end"] if current else next_program["start"] if next_program else None)
+        if source:
+            return source
     if eligible_file(fallback, s):
         return {"mode": "fallback", "key": fallback["id"], "title": "Continuous programming", "url": "/api/files/" + fallback["storage_path"], "anchor": s.get("automation_anchor") or s["created_at"], "until": current["end"] if current else next_program["start"] if next_program else None}
     return None
@@ -157,6 +209,8 @@ async def _decorate(stations, *, private=False):
     t = now_iso()
     media_ids = {p.get("file_id") for s in stations for p in s.get("programmes", []) if p.get("end", "") > t}
     media_ids.update(s.get("fallback_file_id") for s in stations)
+    media_ids.update(item["file_id"] for s in stations for item in s.get("playlist_items", []))
+    media_ids.update(item["file_id"] for s in stations for p in s.get("programmes", []) if p["end"] > t for item in p.get("playlist_items", []))
     media_ids.discard(None)
     files = {f["id"]: f for f in await db.files.find({"id": {"$in": list(media_ids)}}, {"_id": 0}).to_list(len(media_ids) or 1)}
     result = []
@@ -179,6 +233,7 @@ async def _decorate(stations, *, private=False):
         if private:
             view.update({"owner_id": s["owner_id"], "hidden": bool(s.get("hidden")), "visible": visible,
                          "moderation_reason": s.get("moderation_reason"), "automation_enabled": bool(s.get("automation_enabled")), "fallback_file_id": s.get("fallback_file_id"), "starter_available": s["id"] in STARTER_MEDIA})
+            view.update({"playlist_items": s.get("playlist_items", []), "playlist_continuous": bool(s.get("playlist_continuous"))})
         result.append(view)
     return result
 
@@ -235,6 +290,13 @@ async def add_programme(station_id: str, body: ProgrammeIn, user=Depends(get_use
         raise HTTPException(403, "Your broadcasting permission is restricted")
     s = await _owned(station_id, user)
     slots = expand_programmes(body)
+    if body.playlist:
+        if body.format != "prerecorded" or body.file_id or not s.get("playlist_items"):
+            raise HTTPException(422, "Choose a saved playlist for a prerecorded slot")
+        for item in s["playlist_items"]:
+            await _check_file(item["file_id"], s)
+        for slot in slots:
+            slot["playlist_items"] = s["playlist_items"]
     if body.file_id:
         if body.format != "prerecorded":
             raise HTTPException(422, "Media can only be attached to a prerecorded programme")
@@ -272,6 +334,26 @@ async def configure_automation(station_id: str, body: AutomationIn, user=Depends
         fields["automation_anchor"] = now_iso()
     await db.stations.update_one({"id": station_id, "owner_id": user["id"]}, {"$set": fields})
     await audit("station_automation_changed", user, target=station_id, details={"enabled": body.enabled, "fallback": bool(body.fallback_file_id)})
+    return {"ok": True}
+
+
+@router.put("/creator/stations/{station_id}/playlist")
+async def save_playlist(station_id: str, body: PlaylistIn, user=Depends(get_user)):
+    s = await _owned(station_id, user)
+    if user.get("broadcast_blocked") or s.get("hidden"):
+        raise HTTPException(403, "Station broadcasting is restricted")
+    if body.continuous and not body.items:
+        raise HTTPException(422, "Add media before enabling continuous playlists")
+    if sum(item.duration for item in body.items) > 86400:
+        raise HTTPException(422, "A playlist cycle cannot exceed 24 hours")
+    for item in body.items:
+        await _check_file(item.file_id, s)
+    items = [item.model_dump() for item in body.items]
+    fields = {"playlist_items": items, "playlist_continuous": body.continuous}
+    if items != s.get("playlist_items") or not s.get("playlist_anchor"):
+        fields["playlist_anchor"] = now_iso()
+    await db.stations.update_one({"id": station_id, "owner_id": user["id"]}, {"$set": fields})
+    await audit("station_playlist_saved", user, target=station_id, details={"count": len(items), "continuous": body.continuous})
     return {"ok": True}
 
 

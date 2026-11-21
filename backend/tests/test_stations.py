@@ -5,6 +5,43 @@ from app.util import now
 from test_broadcast import media_on
 
 
+def test_playlist_clock_and_fallback():
+    from app.routers.stations import playout
+    t = now()
+    station = {"owner_id":"owner", "kind":"live_radio", "automation_enabled":True,
+               "playlist_continuous":True, "playlist_anchor":t.isoformat(), "fallback_file_id":"a",
+               "playlist_items":[{"file_id":"a","title":"Music","duration":30,"kind":"programme"},
+                                 {"file_id":"b","title":"Break","duration":10,"kind":"commercial"}]}
+    files = {k:{"id":k,"user_id":"owner","storage_path":f"uploads/owner/{k}.mp3","content_type":"audio/mpeg"} for k in ("a","b")}
+    def at(seconds):
+        return playout(station,None,None,None,None,files,(t+timedelta(seconds=seconds)).isoformat())
+    assert at(0)["title"] == "Music"
+    assert at(30)["item_kind"] == "commercial"
+    assert at(40)["title"] == "Music"
+    del files["b"]
+    assert at(35)["item_kind"] == "fallback"
+    assert playout(station,{"content_id":"live","title":"Presenter"},"https://example.invalid/live",None,None,files,t.isoformat())["mode"] == "live"
+
+
+def test_playlist_owner_and_scheduled_snapshot(client, user, admin):
+    h = user["h"]
+    sid = client.put("/api/creator/stations/live_radio", headers=h, json={"name":"Playlist radio"}).json()["id"]
+    root = f"/api/creator/stations/{sid}"
+    file_id = client.post("/api/storage/upload", headers=h, files={"file":("ident.mp3",b"test", "audio/mpeg")}).json()["file_id"]
+    item = {"file_id":file_id,"title":"Ident","duration":30,"kind":"jingle"}
+    playlist = {"items":[item],"continuous":True}
+    assert client.put(root+"/playlist",headers=admin["h"],json=playlist).status_code == 404
+    assert client.put(root+"/playlist",headers=h,json={"items":[{**item,"file_id":"missing"}],"continuous":True}).status_code == 422
+    assert client.put(root+"/playlist",headers=h,json=playlist).status_code == 200
+    assert client.put(root+"/automation",headers=h,json={"enabled":True}).status_code == 200
+    assert client.get(f"/api/stations/{sid}").json()["playout"]["item_kind"] == "jingle"
+    t = now()
+    slot = {"title":"Scheduled lineup","format":"prerecorded","playlist":True,"start":(t-timedelta(seconds=1)).isoformat(),"end":(t+timedelta(hours=1)).isoformat()}
+    assert client.post(root+"/programmes",headers=h,json=slot).status_code == 200
+    assert client.put(root+"/playlist",headers=h,json={"items":[],"continuous":False}).status_code == 200
+    assert client.get(f"/api/stations/{sid}").json()["playout"]["item_kind"] == "jingle"
+
+
 def test_station_identity_schedule_and_moderation(client, user, admin):
     h = user["h"]
     path = "/api/creator/stations/live_tv"
